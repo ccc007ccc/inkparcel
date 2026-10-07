@@ -19,7 +19,16 @@ function errorResponse(error: Error, c: Parameters<Parameters<typeof app.onError
 app.onError(errorResponse); admin.onError(errorResponse);
 app.notFound(notFound); admin.notFound(notFound);
 app.use('*', async (c, next) => {
-  const pathname = new URL(c.req.url).pathname;
+  const url = new URL(c.req.url);
+  const local = c.env.ENVIRONMENT === 'local' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+  if (url.protocol !== 'https:' && !local) {
+    if (url.protocol === 'http:' && (c.req.method === 'GET' || c.req.method === 'HEAD')) {
+      url.protocol = 'https:';
+      return new Response(null, { status: 308, headers: { Location: url.toString(), 'Cache-Control': 'no-store' } });
+    }
+    fail(400, 'https_required', '请使用 HTTPS 连接');
+  }
+  const pathname = url.pathname;
   if (pathname.includes('%') || pathname.includes('\\') || pathname.includes('//')) return notFound();
   assertOrigin(c);
   c.header('X-Content-Type-Options', 'nosniff');
@@ -28,7 +37,7 @@ app.use('*', async (c, next) => {
   c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   c.header('Cache-Control', 'no-store');
   c.header('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'");
-  if (!(c.env.ENVIRONMENT === 'local' && ['localhost', '127.0.0.1', '[::1]'].includes(new URL(c.req.url).hostname))) c.header('Strict-Transport-Security', 'max-age=31536000');
+  if (!local) c.header('Strict-Transport-Security', 'max-age=31536000');
   c.set('settings', await settings(c.env.DB));
   await next();
 });

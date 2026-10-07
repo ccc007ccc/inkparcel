@@ -3,7 +3,7 @@ import { accessCode, decode, decryptSecret, encode, encryptSecret, keyedValue, p
 import { adminSession, clearCookie, issueCookie, rateLimit, secretMatches } from './auth';
 import { downloadObject, fileObject, fileObjects, folderObject, folderObjects, keyObject, now, requireFile, requireFolder, requireKeys, settings, userObject } from './db';
 import type { Bindings, DownloadRow, FileRow, FolderRow, KeyRow, UserRow } from './types';
-import { adminPath, body, boolean, fail, fields, id, integer, keyIds, like, name, nullableId, pagination, query, text, userId } from './validation';
+import { adminPath, body, boolean, fail, fields, id, integer, keyIds, like, name, notes as noteText, nullableId, pagination, query, text, userId } from './validation';
 import { uploadRoutes } from './uploads';
 
 export const admin = new Hono<Bindings>();
@@ -60,7 +60,7 @@ admin.post('/folders', async c => {
   const folderId = crypto.randomUUID();
   await c.env.DB.batch([
     c.env.DB.prepare('INSERT INTO folders (id, name, parent_id, created_at) VALUES (?, ?, ?, ?)').bind(folderId, folderName, parent, now()),
-    ...keys.map(key => c.env.DB.prepare('INSERT INTO folder_keys (folder_id, key_id) VALUES (?, ?)').bind(folderId, key))
+    c.env.DB.prepare('INSERT INTO folder_keys (folder_id, key_id) SELECT ?, value FROM json_each(?)').bind(folderId, JSON.stringify(keys))
   ]);
   return c.json({ folder: { id: folderId, name: folderName, parentId: parent, defaultKeyIds: keys } }, 201);
 });
@@ -78,7 +78,7 @@ admin.patch('/folders/:id', async c => {
   // Defaults do not change file ACLs. A cycle failure must not change defaults either.
   if (keys) {
     statements.push(c.env.DB.prepare('DELETE FROM folder_keys WHERE folder_id = ? AND (SELECT name = ? AND parent_id IS ? FROM folders WHERE id = ?)').bind(row.id, folderName, parent, row.id));
-    for (const key of keys) statements.push(c.env.DB.prepare('INSERT INTO folder_keys (folder_id, key_id) SELECT ?, ? WHERE (SELECT name = ? AND parent_id IS ? FROM folders WHERE id = ?)').bind(row.id, key, folderName, parent, row.id));
+    statements.push(c.env.DB.prepare('INSERT INTO folder_keys (folder_id, key_id) SELECT ?, value FROM json_each(?) WHERE (SELECT name = ? AND parent_id IS ? FROM folders WHERE id = ?)').bind(row.id, JSON.stringify(keys), folderName, parent, row.id));
   }
   const result = await c.env.DB.batch<FolderRow>(statements);
   if (!result[0].results.length) fail(409, 'folder_cycle', '不能将文件夹移动到自身或子文件夹');
@@ -113,7 +113,10 @@ admin.patch('/files/:id', async c => {
   const keys = input.keyIds === undefined ? undefined : keyIds(input.keyIds);
   await requireFolder(c.env.DB, folder); if (keys) await requireKeys(c.env.DB, keys);
   const statements = [c.env.DB.prepare('UPDATE files SET name = ?, folder_id = ? WHERE id = ?').bind(displayName, folder, row.id)];
-  if (keys) { statements.push(c.env.DB.prepare('DELETE FROM file_keys WHERE file_id = ?').bind(row.id)); for (const key of keys) statements.push(c.env.DB.prepare('INSERT INTO file_keys (file_id, key_id) VALUES (?, ?)').bind(row.id, key)); }
+  if (keys) {
+    statements.push(c.env.DB.prepare('DELETE FROM file_keys WHERE file_id = ?').bind(row.id));
+    statements.push(c.env.DB.prepare('INSERT INTO file_keys (file_id, key_id) SELECT ?, value FROM json_each(?)').bind(row.id, JSON.stringify(keys)));
+  }
   await c.env.DB.batch(statements); return c.json({ file: await fileObject(c.env.DB, await requireFile(c.env.DB, row.id)) });
 });
 admin.delete('/files/:id', async c => {
@@ -135,7 +138,7 @@ admin.get('/users', async c => {
 admin.patch('/users/:id', async c => {
   const input = await body(c); fields(input, ['notes', 'blocked']);
   const row = await c.env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(id(c.req.param('id'))).first<UserRow>(); if (!row) fail(404, 'user_not_found', '用户不存在');
-  const notes = input.notes === undefined ? row.notes : text(input.notes, '备注', 2000, true); const blocked = input.blocked === undefined ? row.blocked : Number(boolean(input.blocked));
+  const notes = input.notes === undefined ? row.notes : noteText(input.notes); const blocked = input.blocked === undefined ? row.blocked : Number(boolean(input.blocked));
   const updated = await c.env.DB.prepare('UPDATE users SET notes = ?, blocked = ? WHERE id = ? RETURNING *').bind(notes, blocked, row.id).first<UserRow>(); return c.json({ user: userObject(updated!) });
 });
 admin.get('/downloads', async c => {

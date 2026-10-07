@@ -1,8 +1,8 @@
-import { handlerFor } from '@inkparcel/marking';
 import { Hono } from 'hono';
 import { decryptSecret, signMarker, utf8 } from './crypto';
 import { authorizedFile, now } from './db';
 import { r2Source } from './source';
+import { storedFormat } from './formats';
 import type { Bindings, DownloadRow } from './types';
 import { body, fail, fields, id } from './validation';
 
@@ -27,6 +27,7 @@ function disposition(name: string) {
 downloadRoutes.post('/files/:id/downloads', async c => {
   const input = await body(c); fields(input, []);
   const file = await authorizedFile(c, id(c.req.param('id'))); const user = c.get('user'); const key = c.get('key');
+  storedFormat(file);
   const issuanceId = crypto.randomUUID(); const issuedAt = now();
   const marker = await signMarker(await decryptSecret(c.env, key.secret_encrypted), {
     v: 1, issuanceId, userId: user.id, keyId: key.id, fileId: file.id,
@@ -47,12 +48,14 @@ downloadRoutes.on(['GET', 'HEAD'], '/downloads/:id', async c => {
     .bind(id(c.req.param('id')), c.get('user').id, c.get('key').id).first<DownloadRow>();
   if (!receipt) fail(404, 'download_not_found', '下载记录不存在');
   const file = await authorizedFile(c, receipt.file_id);
-  const marked = await handlerFor(file.original_name).mark(r2Source(c.env.BUCKET, file.object_key, file.size), utf8(receipt.marker));
+  const format = storedFormat(file);
+  const marked = await format.handler.mark(r2Source(c.env.BUCKET, file.object_key, file.size), utf8(receipt.marker));
   const etag = `"inkparcel-${receipt.id}"`; const modified = new Date(receipt.created_at).toUTCString();
-  const headers = new Headers({ 'Content-Type': 'application/vnd.android.package-archive', 'Content-Disposition': disposition(receipt.signed_name),
+  const headers = new Headers({ 'Content-Type': format.mediaType, 'Content-Disposition': disposition(receipt.signed_name),
     'Cache-Control': 'private, no-store', 'Accept-Ranges': 'bytes', ETag: etag, 'Last-Modified': modified, 'X-Content-Type-Options': 'nosniff' });
   const rangeHeader = c.req.header('Range'); const ifRange = c.req.header('If-Range');
-  const honorRange = rangeHeader && (!ifRange || ifRange === etag || ifRange === modified);
+  // RFC 9110 only defines Range for GET. HEAD describes the complete representation.
+  const honorRange = c.req.method === 'GET' && rangeHeader && (!ifRange || ifRange === etag || ifRange === modified);
   const range = honorRange ? parseRange(rangeHeader, marked.size) : undefined;
   if (range === null) { headers.set('Content-Range', `bytes */${marked.size}`); headers.set('Content-Length', '0'); return new Response(null, { status: 416, headers }); }
   const size = range?.length ?? marked.size;

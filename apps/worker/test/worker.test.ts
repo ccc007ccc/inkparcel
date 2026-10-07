@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { env as rawEnv } from 'cloudflare:workers';
-import { SELF, applyD1Migrations, reset } from 'cloudflare:test';
+import { SELF, applyD1Migrations, createExecutionContext, reset } from 'cloudflare:test';
 import type { D1Migration } from '@cloudflare/vitest-pool-workers';
 import { apkHandler, blobSource, fingerprintApk } from '@inkparcel/marking';
 import { cleanup } from '../src/cleanup';
 import { decode, encode, readMarker } from '../src/crypto';
 import { PART_SIZE } from '../src/uploads';
+import { app } from '../src/index';
 import type { Env } from '../src/types';
 
 const env = rawEnv as unknown as Env & { TEST_MIGRATIONS: D1Migration[] };
@@ -66,6 +67,31 @@ async function upload(adminCookie: string, bytes: Uint8Array, keyIds: string[], 
 beforeEach(async () => { await reset(); await applyD1Migrations(env.DB, env.TEST_MIGRATIONS); });
 
 describe('setup, routes and administrator sessions', () => {
+  it('preserves multiline recipient notes while rejecting embedded control characters', async () => {
+    const adminCookie = await setup(); const key = await createKey(adminCookie); const user = await recipient(adminCookie, key.key.id);
+    const response = await call(`${A}/api/users/${user.data.user.id}`, 'PATCH', { notes: 'First line\r\nSecond\titem' }, adminCookie);
+    expect(response.status).toBe(200); expect((await json(response)).user.notes).toBe('First line\nSecond\titem');
+    expect((await call(`${A}/api/users/${user.data.user.id}`, 'PATCH', { notes: 'hidden\u0000control' }, adminCookie)).status).toBe(400);
+  });
+  it('rejects malformed Unicode identities and filenames before storing unusable values', async () => {
+    const adminCookie = await setup(); const key = await createKey(adminCookie);
+    for (const malformed of ['\ud800', '\udfff']) {
+      expect((await call(`${A}/api/keys/${key.key.id}/code`, 'POST', { userId: `user${malformed}` }, adminCookie)).status).toBe(400);
+      expect((await call('/api/access', 'POST', { userId: malformed, code: 'invalid' })).status).toBe(400);
+      expect((await call(`${A}/api/uploads`, 'POST', { fileName: `${malformed}.apk`, size: 128, fingerprint: '0'.repeat(64), keyIds: [] }, adminCookie)).status).toBe(400);
+    }
+    const valid = await recipient(adminCookie, key.key.id, 'Reader 🚀'); expect(valid.data.user.userId).toBe('Reader 🚀');
+  });
+  it('requires HTTPS outside explicit local loopback and never redirects credential POSTs', async () => {
+    const production = { ...env, ENVIRONMENT: 'production' };
+    const redirect = await app.fetch(new Request('http://localhost:8787/admin?test=1'), production, createExecutionContext());
+    expect(redirect.status).toBe(308); expect(redirect.headers.get('Location')).toBe('https://localhost:8787/admin?test=1'); expect(await redirect.text()).toBe('');
+    const insecure = await app.fetch(new Request('http://localhost/api/setup', { method: 'POST', body: '{}' }), production, createExecutionContext());
+    expect(insecure.status).toBe(400); expect(insecure.headers.has('Location')).toBe(false); expect((await json(insecure)).error.code).toBe('https_required');
+    const remoteLocal = await app.fetch(new Request('http://example.test/admin'), env, createExecutionContext()); expect(remoteLocal.status).toBe(308);
+    const secure = await app.fetch(new Request('https://example.test/api/setup', { method: 'POST', headers: { Origin: 'https://example.test', 'Content-Type': 'application/json' }, body: JSON.stringify({ bootstrapToken: env.BOOTSTRAP_TOKEN, passwordKey, passwordSalt, adminPath: A }) }), production, createExecutionContext());
+    expect(secure.status).toBe(201); expect(secure.headers.get('Set-Cookie')).toContain('; Secure');
+  });
   it('requires the deployment token and atomically chooses one administrator', async () => {
     expect((await call('/admin')).status).toBe(200);
     expect((await call('/api/setup', 'POST', { bootstrapToken: 'wrong', passwordKey, passwordSalt, adminPath: A })).status).toBe(403);
@@ -94,6 +120,35 @@ describe('setup, routes and administrator sessions', () => {
 });
 
 describe('authorized files and stable marked transfers', () => {
+  it('pins the registered format version and rejects a silent handler change', async () => {
+    const adminCookie = await setup(); const key = await createKey(adminCookie); const file = await upload(adminCookie, structuralApk(), [key.key.id]);
+    const stored = await env.DB.prepare('SELECT handler_version FROM files WHERE id = ?').bind(file.id).first<{handler_version: string}>(); expect(stored!.handler_version).toBe('apk-v1');
+    const user = await recipient(adminCookie, key.key.id);
+    await call(`${A}/api/files/${file.id}`, 'PATCH', { name: 'renamed.data' }, adminCookie);
+    const receipt = await json(await call(`/api/files/${file.id}/downloads`, 'POST', {}, user.cookie));
+    const head = await call(receipt.url, 'HEAD', undefined, user.cookie); expect(head.status).toBe(200); expect(head.headers.get('Content-Type')).toBe('application/vnd.android.package-archive');
+    await env.DB.prepare("UPDATE files SET handler_version = 'unavailable-test-version' WHERE id = ?").bind(file.id).run();
+    expect((await call(receipt.url, 'GET', undefined, user.cookie)).status).toBe(409);
+    expect((await call(`/api/files/${file.id}/downloads`, 'POST', {}, user.cookie)).status).toBe(409);
+    expect((await call(`${A}/api/uploads/${file.id}/complete`, 'POST', {}, adminCookie)).status).toBe(409);
+  });
+  it('creates and updates 100-key ACLs atomically without a statement per key', async () => {
+    const adminCookie = await setup();
+    // These rows are storage/ACL principals only, with no usable test credentials.
+    const keys = Array.from({ length: 100 }, (_, index) => ({ id: crypto.randomUUID(), code: index.toString(16).padStart(8, '0'), name: `Group ${index}` }));
+    await env.DB.prepare(`INSERT INTO keys (id, code, name, secret_encrypted, secret_digest, created_at)
+      SELECT json_extract(value, '$.id'), json_extract(value, '$.code'), json_extract(value, '$.name'), 'unused-test-ciphertext', json_extract(value, '$.id'), '2026-01-01T00:00:00.000Z' FROM json_each(?)`).bind(JSON.stringify(keys)).run();
+    const allIds = keys.map(key => key.id);
+    const folderResponse = await call(`${A}/api/folders`, 'POST', { name: 'All groups', defaultKeyIds: allIds }, adminCookie);
+    expect(folderResponse.status).toBe(201); const folder = (await json(folderResponse)).folder; expect(folder.defaultKeyIds).toHaveLength(100);
+    const file = await upload(adminCookie, structuralApk(), allIds, folder.id); expect(new Set(file.keyIds)).toEqual(new Set(allIds));
+    expect((await call(`${A}/api/files/${file.id}`, 'PATCH', { keyIds: [] }, adminCookie)).status).toBe(200);
+    const changed = await json(await call(`${A}/api/files/${file.id}`, 'PATCH', { keyIds: allIds }, adminCookie)); expect(new Set(changed.file.keyIds)).toEqual(new Set(allIds));
+    expect((await call(`${A}/api/folders/${folder.id}`, 'PATCH', { defaultKeyIds: [] }, adminCookie)).status).toBe(200);
+    const defaults = await json(await call(`${A}/api/folders/${folder.id}`, 'PATCH', { defaultKeyIds: allIds }, adminCookie)); expect(new Set(defaults.folder.defaultKeyIds)).toEqual(new Set(allIds));
+    expect((await call(`${A}/api/folders/${folder.id}`, 'PATCH', { parentId: folder.id, defaultKeyIds: [] }, adminCookie)).status).toBe(409);
+    const unchanged = await json(await call(`${A}/api/folders`, 'GET', undefined, adminCookie)); expect(unchanged.items[0].defaultKeyIds).toHaveLength(100);
+  });
   it('isolates active keys, hides folders, resumes identical output, and traces retired keys', async () => {
     const adminCookie = await setup(); const first = await createKey(adminCookie, 'Alpha'); const second = await createKey(adminCookie, 'Beta');
     expect((await call(`${A}/api/keys`, 'POST', { name: 'duplicate', secret: first.secret }, adminCookie)).status).toBe(409);
@@ -108,6 +163,8 @@ describe('authorized files and stable marked transfers', () => {
     const receipt = await json(await call(`/api/files/${file.id}/downloads`, 'POST', {}, alpha.cookie));
     expect((await call(receipt.url, 'GET', undefined, beta.cookie)).status).toBe(404);
     const head = await call(receipt.url, 'HEAD', undefined, alpha.cookie); expect(head.status).toBe(200); expect(await head.text()).toBe('');
+    const rangedHead = await call(receipt.url, 'HEAD', undefined, alpha.cookie, { Range: 'bytes=0-9' });
+    expect(rangedHead.status).toBe(200); expect(rangedHead.headers.get('Content-Length')).toBe(head.headers.get('Content-Length')); expect(rangedHead.headers.has('Content-Range')).toBe(false);
     const response = await call(receipt.url, 'GET', undefined, alpha.cookie); const full = new Uint8Array(await response.arrayBuffer());
     expect(full.length).toBe(Number(head.headers.get('Content-Length'))); expect(response.headers.get('ETag')).toBe(head.headers.get('ETag'));
     expect(response.headers.get('Cache-Control')).toBe('private, no-store');
@@ -149,6 +206,20 @@ describe('authorized files and stable marked transfers', () => {
 });
 
 describe('multipart lifecycle and retention', () => {
+  it('recovers completion after a transient R2 inspection read failure', async () => {
+    const adminCookie = await setup(); const bytes = structuralApk(); const session = await beginUpload(adminCookie, bytes, []);
+    expect((await putPart(adminCookie, session.fileId, 1, bytes)).status).toBe(200);
+    const failingBucket = new Proxy(env.BUCKET, { get(target, property) {
+      if (property === 'get') return () => Promise.reject(new Error('Temporary R2 transport failure'));
+      const value = Reflect.get(target, property); return typeof value === 'function' ? value.bind(target) : value;
+    } });
+    const request = new Request(`http://localhost${A}/api/uploads/${session.fileId}/complete`, { method: 'POST', headers: { Origin: 'http://localhost', Cookie: adminCookie, 'Content-Type': 'application/json' }, body: '{}' });
+    const failed = await app.fetch(request, { ...env, BUCKET: failingBucket }, createExecutionContext());
+    expect(failed.status).toBe(503);
+    expect((await env.DB.prepare('SELECT state FROM uploads WHERE file_id = ?').bind(session.fileId).first<{state: string}>())!.state).toBe('completing');
+    expect(await env.BUCKET.head(`artifacts/${session.fileId}`)).not.toBeNull();
+    expect((await call(`${A}/api/uploads/${session.fileId}/complete`, 'POST', {}, adminCookie)).status).toBe(200);
+  });
   it('streams a full 16 MiB part, retries parts and completion, and retains immutable file versions', async () => {
     const adminCookie = await setup(); const bytes = structuralApk(PART_SIZE + 50); const session = await beginUpload(adminCookie, bytes, []);
     expect(session.partSize).toBe(PART_SIZE); expect(session.partCount).toBe(2);

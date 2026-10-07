@@ -48,7 +48,7 @@ CREATE TABLE files (
   object_key TEXT NOT NULL UNIQUE,
   size INTEGER NOT NULL CHECK (size > 0),
   fingerprint TEXT NOT NULL,
-  handler_version TEXT NOT NULL DEFAULT 'apk-v1',
+  handler_version TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'ready', 'deleted')),
   object_deleted INTEGER NOT NULL DEFAULT 0 CHECK (object_deleted IN (0, 1)),
   uploaded_at TEXT NOT NULL

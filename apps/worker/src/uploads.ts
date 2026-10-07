@@ -1,9 +1,10 @@
 import { Hono } from 'hono';
-import { inspectApk } from '@inkparcel/marking';
+import { MarkingError } from '@inkparcel/marking';
 import { fileObject, now, requireFile, requireFolder, requireKeys } from './db';
 import { r2Source } from './source';
+import { selectFormat, storedFormat } from './formats';
 import type { Bindings, FileRow, UploadRow } from './types';
-import { body, fail, fields, fingerprint, id, integer, keyIds, name, nullableId } from './validation';
+import { ApiError, body, fail, fields, fingerprint, id, integer, keyIds, name, nullableId } from './validation';
 
 export const PART_SIZE = 16 * 1024 * 1024;
 const MAX_SIZE = 0xffffffff;
@@ -21,17 +22,17 @@ function expectedPart(file: FileRow, number: number) {
 }
 uploadRoutes.post('/', async c => {
   const input = await body(c); fields(input, ['fileName', 'size', 'folderId', 'keyIds', 'fingerprint']);
-  const fileName = name(input.fileName); if (!/\.apk$/i.test(fileName)) fail(415, 'unsupported_format', '当前仅支持 APK');
+  const fileName = name(input.fileName); const format = selectFormat(fileName);
   const size = integer(input.size, 1, MAX_SIZE); const folder = nullableId(input.folderId); const keys = keyIds(input.keyIds); const hash = fingerprint(input.fingerprint);
   await Promise.all([requireFolder(c.env.DB, folder), requireKeys(c.env.DB, keys)]);
   const fileId = crypto.randomUUID(); const objectKey = `artifacts/${fileId}`;
-  const multipart = await c.env.BUCKET.createMultipartUpload(objectKey, { httpMetadata: { contentType: 'application/vnd.android.package-archive' }, customMetadata: { fileId } });
+  const multipart = await c.env.BUCKET.createMultipartUpload(objectKey, { httpMetadata: { contentType: format.mediaType }, customMetadata: { fileId } });
   try {
     const created = now();
     await c.env.DB.batch([
-      c.env.DB.prepare('INSERT INTO files (id, name, original_name, folder_id, object_key, size, fingerprint, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(fileId, fileName, fileName, folder, objectKey, size, hash, created),
+      c.env.DB.prepare('INSERT INTO files (id, name, original_name, folder_id, object_key, size, fingerprint, handler_version, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(fileId, fileName, fileName, folder, objectKey, size, hash, format.version, created),
       c.env.DB.prepare('INSERT INTO uploads (file_id, multipart_id, updated_at) VALUES (?, ?, ?)').bind(fileId, multipart.uploadId, created),
-      ...keys.map(key => c.env.DB.prepare('INSERT INTO file_keys (file_id, key_id) VALUES (?, ?)').bind(fileId, key))
+      c.env.DB.prepare('INSERT INTO file_keys (file_id, key_id) SELECT ?, value FROM json_each(?)').bind(fileId, JSON.stringify(keys))
     ]);
   } catch (error) { await multipart.abort(); throw error; }
   return c.json({ fileId, partSize: PART_SIZE, partCount: Math.ceil(size / PART_SIZE) }, 201);
@@ -76,6 +77,7 @@ uploadRoutes.put('/:id/parts/:number', async c => {
 uploadRoutes.post('/:id/complete', async c => {
   const input = await body(c); fields(input, []);
   const fileId = id(c.req.param('id')); const [row, file] = await Promise.all([upload(c.env.DB, fileId), requireFile(c.env.DB, fileId)]);
+  const format = storedFormat(file);
   if (file.status === 'ready') return c.json({ file: await fileObject(c.env.DB, file) });
   if (!['uploading', 'completing'].includes(row.state) || file.status !== 'pending') fail(409, 'upload_not_completable', '上传会话无法完成');
   let object = await c.env.BUCKET.head(file.object_key);
@@ -97,12 +99,18 @@ uploadRoutes.post('/:id/complete', async c => {
   }
   try {
     if (!object || object.size !== file.size) fail(422, 'file_size_mismatch', '上传文件大小不符');
-    const inspection = await inspectApk(r2Source(c.env.BUCKET, file.object_key, file.size)) as { hasMarker: boolean };
-    if (inspection.hasMarker) fail(422, 'already_marked', '请上传未带 InkParcel 标记的原始 APK');
+    await format.assertMarkable(r2Source(c.env.BUCKET, file.object_key, file.size));
   } catch (error) {
+    const invalidArtifact = error instanceof MarkingError || (error instanceof ApiError && error.code === 'file_size_mismatch');
+    if (!invalidArtifact) {
+      // A completed R2 object is reusable after transient reads fail. Do not force a
+      // full re-upload merely because structural inspection could not fetch a range.
+      if (error instanceof ApiError) throw error;
+      fail(503, 'validation_unavailable', '文件校验暂不可用，请重试完成上传');
+    }
     await c.env.DB.prepare("UPDATE uploads SET state = 'failed', updated_at = ? WHERE file_id = ? AND state IN ('uploading', 'completing')").bind(now(), fileId).run();
     if (error instanceof Error && 'status' in error) throw error;
-    fail(422, 'invalid_apk', error instanceof Error ? `APK 校验失败：${error.message}` : 'APK 校验失败');
+    fail(422, 'invalid_file', error instanceof Error ? `文件校验失败：${error.message}` : '文件校验失败');
   }
   const completedAt = now();
   const results = await c.env.DB.batch([

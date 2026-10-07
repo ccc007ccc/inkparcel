@@ -29,10 +29,16 @@ export function fields(value: Record<string, unknown>, allowed: string[]) {
 export function text(value: unknown, name: string, max = 128, allowEmpty = false): string {
   if (typeof value !== 'string') fail(400, 'invalid_field', `${name} 必须是文本`);
   const result = value.trim().normalize('NFC');
-  if ((!allowEmpty && !result) || [...result].length > max || /[\p{Cc}\p{Cf}]/u.test(result)) fail(400, 'invalid_field', `${name} 格式无效`);
+  if ((!allowEmpty && !result) || [...result].length > max || /[\p{Cc}\p{Cf}\p{Cs}]/u.test(result)) fail(400, 'invalid_field', `${name} 格式无效`);
   return result;
 }
 export function userId(value: unknown) { return text(value, '用户 ID'); }
+export function notes(value: unknown): string {
+  if (typeof value !== 'string') fail(400, 'invalid_field', '备注必须是文本');
+  const result = value.replace(/\r\n?/g, '\n').trim().normalize('NFC');
+  if ([...result].length > 2000 || /[\p{Cf}\p{Cs}\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]/u.test(result)) fail(400, 'invalid_field', '备注格式无效');
+  return result;
+}
 export function name(value: unknown): string {
   const result = text(value, '名称', 255);
   if (result === '.' || result === '..' || /[/\\]/.test(result)) fail(400, 'invalid_name', '名称不能包含路径');
