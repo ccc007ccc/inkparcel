@@ -88,6 +88,8 @@ scope. Interfaces must permit adding handlers without changing issuance logic.
 
 ## Marker and APK contracts
 
+The byte-level format and fingerprint algorithm are defined in [APK format](apk-format.md).
+
 - A versioned authenticated envelope binds key ID, opaque recipient ID, immutable
   file ID, normalized fingerprint, issued-name snapshot and unique issuance ID.
   Authenticate exact serialized bytes, bound sizes, and reject unsupported versions.

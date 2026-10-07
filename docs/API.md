@@ -84,6 +84,9 @@ All following paths are prefixed with `A/api` and require admin authentication.
 
 ## Marking package
 
+Binary parsing, supported signatures and fingerprint normalization are defined in
+[APK format](apk-format.md).
+
 Package name: `@inkparcel/marking`. Implementation lives in `packages/marking`.
 
 ```ts

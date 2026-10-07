@@ -1,6 +1,8 @@
 {
   "name": "inkparcel",
   "version": "0.1.0",
+  "type": "module",
+  "license": "Apache-2.0",
   "private": true,
   "packageManager": "pnpm@9.15.9",
   "engines": { "node": ">=22.0.0" },
@@ -10,15 +12,21 @@
     "build": "pnpm build:web && wrangler deploy --dry-run",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
+    "test:apk": "tsx scripts/verify-apks.ts",
+    "test:e2e": "playwright test",
+    "fixtures": "python3 scripts/generate-apk-fixtures.py",
+    "setup:local": "node scripts/init-local.mjs",
     "check": "pnpm typecheck && pnpm test && pnpm build",
     "db:migrate": "wrangler d1 migrations apply inkparcel --local",
     "deploy": "pnpm build:web && wrangler deploy"
   },
   "devDependencies": {
+    "@playwright/test": "^1.56.0",
     "@types/node": "^24.0.0",
     "@vitejs/plugin-react": "^5.0.0",
     "concurrently": "^9.2.0",
     "typescript": "^5.9.3",
+    "tsx": "^4.20.0",
     "vite": "^7.2.0",
     "vitest": "^4.1.0",
     "wrangler": "^4.148.0"
