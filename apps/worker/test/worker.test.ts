@@ -874,3 +874,97 @@ describe('custom management paths', () => {
     }
   });
 });
+
+describe('stealth presentation setting', () => {
+  it('is admin-controlled, persists across partial updates and keeps marking enabled', async () => {
+    const cookie = await setup();
+    expect((await json(await call('/api/site'))).stealthMode).toBe(false);
+    expect((await call(`${A}/api/settings`, 'PATCH', { stealthMode: true })).status).toBe(401);
+    expect((await call(`${A}/api/settings`, 'PATCH', { stealthMode: 'true' }, cookie)).status).toBe(
+      400,
+    );
+    expect((await call(`${A}/api/settings`, 'PATCH', { stealthMode: true }, cookie)).status).toBe(
+      200,
+    );
+    await call(`${A}/api/settings`, 'PATCH', { siteName: 'Files' }, cookie);
+    expect((await json(await call('/api/site'))).stealthMode).toBe(true);
+    expect(
+      (await json(await call(`${A}/api/settings`, 'GET', undefined, cookie))).stealthMode,
+    ).toBe(true);
+    const key = await createKey(cookie);
+    const file = await upload(cookie, structuralApk(), [key.key.id]);
+    const user = await recipient(cookie, key.key.id);
+    const receipt = await json(
+      await call(`/api/files/${file.id}/downloads`, 'POST', {}, user.cookie),
+    );
+    const bytes = await (await call(receipt.url, 'GET', undefined, user.cookie)).arrayBuffer();
+    const source = blobSource(new Blob([bytes]));
+    const marker = new TextDecoder().decode((await apkHandler.extract(source))!);
+    const trace = await json(
+      await call(
+        `${A}/api/trace`,
+        'POST',
+        { marker, fingerprint: await fingerprintApk(source) },
+        cookie,
+      ),
+    );
+    expect(trace.authentic).toBe(true);
+    expect(trace.contentMatch).toBe(true);
+    expect(trace.user.id).toBe(user.data.user.id);
+    await call(`${A}/api/settings`, 'PATCH', { stealthMode: false }, cookie);
+    expect((await json(await call('/api/site'))).stealthMode).toBe(false);
+  });
+});
+
+describe('site branding and icons', () => {
+  it('updates escaped HTML titles and validates, serves, replaces and resets icons', async () => {
+    const cookie = await setup();
+    const title = '分享 <测试> & 文件';
+    await call(`${A}/api/settings`, 'PATCH', { siteName: title }, cookie);
+    expect((await json(await call('/api/site'))).name).toBe(title);
+    const html = await (await call('/')).text();
+    expect(html).toContain('分享 &lt;测试&gt; &amp; 文件');
+    const png = Uint8Array.from(
+      atob(
+        'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAGUlEQVR4nGNwyov4TwlmGDVg1IBRA4aLAQBpQwcfAk27cgAAAABJRU5ErkJggg==',
+      ),
+      (byte) => byte.charCodeAt(0),
+    );
+    const put = (bytes: Uint8Array, cookie?: string, contentType = 'image/png') =>
+      SELF.fetch(`http://localhost${A}/api/site-icon`, {
+        method: 'PUT',
+        headers: {
+          Origin: 'http://localhost',
+          'Content-Type': contentType,
+          ...(cookie ? { Cookie: cookie } : {}),
+        },
+        body: bytes,
+      });
+    expect((await put(png)).status).toBe(401);
+    expect((await put(png, cookie, 'image/svg+xml')).status).toBe(415);
+    expect((await put(new Uint8Array(256 * 1024 + 1), cookie)).status).toBe(413);
+    expect((await put(png.slice(0, 20), cookie)).status).toBe(400);
+    const oversized = png.slice();
+    new DataView(oversized.buffer).setUint32(16, 1025);
+    expect((await put(oversized, cookie)).status).toBe(400);
+    const first = await json(await put(png, cookie));
+    expect(first.hasCustomIcon).toBe(true);
+    const icon = await call(first.iconUrl);
+    expect(icon.headers.get('Content-Type')).toBe('image/png');
+    expect(icon.headers.get('X-Content-Type-Options')).toBe('nosniff');
+    expect(new Uint8Array(await icon.arrayBuffer())).toEqual(png);
+    expect((await call(first.iconUrl, 'HEAD')).status).toBe(200);
+    expect((await json(await call('/api/site'))).iconUrl).toBe(first.iconUrl);
+    const second = await json(await put(png, cookie));
+    expect(second.iconUrl).not.toBe(first.iconUrl);
+    expect(
+      (await env.DB.prepare('SELECT COUNT(*) AS n FROM site_icon').first<{ n: number }>())!.n,
+    ).toBe(1);
+    expect((await call(`${A}/api/site-icon`, 'DELETE')).status).toBe(401);
+    expect((await call(`${A}/api/site-icon`, 'DELETE', undefined, cookie)).status).toBe(200);
+    expect(
+      (await json(await call(`${A}/api/settings`, 'GET', undefined, cookie))).hasCustomIcon,
+    ).toBe(false);
+    expect((await call('/api/site-icon')).headers.get('Content-Type')).toBe('image/svg+xml');
+  });
+});

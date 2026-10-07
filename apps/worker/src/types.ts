@@ -11,6 +11,8 @@ export interface Env {
 export interface SettingsRow {
   id: number;
   site_name: string;
+  stealth_mode: number;
+  icon_version: string | null;
   admin_path: string;
   password_verifier: string;
   password_salt: string;

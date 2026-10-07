@@ -13,23 +13,35 @@ import {
 } from './lib';
 import { PublicLibrary } from './Public';
 import { Admin } from './Admin';
+import { SiteContext, useSite, type SiteInfo } from './site';
 
 export function App() {
   const path = window.location.pathname.replace(/\/+$/, '') || '/';
-  const [site, setSite] = useState<{ name: string; initialized: boolean }>();
+  const [site, setSite] = useState<SiteInfo>();
   const [error, setError] = useState('');
   useEffect(() => {
-    api<{ name: string; initialized: boolean }>('/api/site')
+    api<SiteInfo>('/api/site')
       .then(setSite)
       .catch((error) => setError(message(error)));
   }, []);
   useEffect(() => {
-    document.title = site ? `${site.name} · InkParcel` : 'InkParcel';
-  }, [site]);
+    document.title = site
+      ? site.stealthMode && path === '/' && site.name === 'InkParcel'
+        ? '文件分享'
+        : site.name
+      : '文件分享';
+    let icon = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+    if (!icon) {
+      icon = document.createElement('link');
+      icon.rel = 'icon';
+      document.head.append(icon);
+    }
+    icon.href = site?.iconUrl || '/api/site-icon';
+  }, [site, path]);
   if (error)
     return (
       <div className="screen-center">
-        <Brand />
+        {path === '/' ? <span>文件分享</span> : <Brand />}
         <Alert>{error}</Alert>
         <button className="button button-primary" onClick={() => location.reload()}>
           重新加载
@@ -39,24 +51,39 @@ export function App() {
   if (!site)
     return (
       <div className="screen-center">
-        <Brand />
+        {path === '/' ? <span>文件分享</span> : <Brand />}
         <Spinner />
       </div>
     );
-  if (path === '/admin')
-    return site.initialized ? (
-      <div className="screen-center">
-        <Brand />
-        <h1>404</h1>
-        <p>这个地址不存在。</p>
-        <a className="button button-secondary" href="/">
-          返回首页
-        </a>
-      </div>
+  const content =
+    path === '/admin' ? (
+      site.initialized ? (
+        <div className="screen-center">
+          <Brand />
+          <h1>404</h1>
+          <p>这个地址不存在。</p>
+          <a className="button button-secondary" href="/">
+            返回首页
+          </a>
+        </div>
+      ) : (
+        <Setup />
+      )
+    ) : path === '/' ? (
+      <Recipient
+        name={site.stealthMode && site.name === 'InkParcel' ? '文件分享' : site.name}
+        stealthMode={site.stealthMode}
+      />
     ) : (
-      <Setup />
+      <AdminGate base={path} />
     );
-  return path === '/' ? <Recipient name={site.name} /> : <AdminGate base={path} />;
+  return (
+    <SiteContext.Provider
+      value={{ ...site, refresh: async () => setSite(await api<SiteInfo>('/api/site')) }}
+    >
+      {content}
+    </SiteContext.Provider>
+  );
 }
 
 function AuthFrame({
@@ -64,12 +91,26 @@ function AuthFrame({
   title,
   subtitle,
   eyebrow,
+  minimalName,
 }: {
   children: ReactNode;
   title: ReactNode;
   subtitle: string;
   eyebrow: string;
+  minimalName?: string;
 }) {
+  const site = useSite();
+  if (minimalName)
+    return (
+      <div className="auth-page">
+        <header className="site-header">
+          <Brand compact name={minimalName} />
+        </header>
+        <main className="simple-access">
+          <section className="auth-form-panel">{children}</section>
+        </main>
+      </div>
+    );
   return (
     <div className="auth-page">
       <header className="site-header">
@@ -78,7 +119,9 @@ function AuthFrame({
       </header>
       <main className="auth-layout">
         <section className="auth-story">
-          <div className="eyebrow">INKPARCEL / {eyebrow}</div>
+          <div className="eyebrow">
+            {site.name} / {eyebrow}
+          </div>
           <h1>{title}</h1>
           <p>{subtitle}</p>
           <div className="parcel-art" aria-hidden="true">
@@ -95,7 +138,7 @@ function AuthFrame({
                 <span>VERIFIED</span>
               </div>
               <div className="sheet-foot">
-                INKPARCEL <span>↗</span>
+                {site.name} <span>↗</span>
               </div>
             </div>
             <span className="art-caption">一份文件，一枚专属印记。</span>
@@ -104,13 +147,13 @@ function AuthFrame({
         <section className="auth-form-panel">{children}</section>
       </main>
       <footer className="site-footer">
-        <span>InkParcel · 开源文件分发</span>
+        <span>{site.name} · 文件分发</span>
         <span>交付有序，来处可循。</span>
       </footer>
     </div>
   );
 }
-function Recipient({ name }: { name: string }) {
+function Recipient({ name, stealthMode }: { name: string; stealthMode: boolean }) {
   const [session, setSession] = useState<Session | null>();
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -151,14 +194,22 @@ function Recipient({ name }: { name: string }) {
   if (session === undefined)
     return (
       <div className="screen-center">
-        <Brand />
+        <Brand compact={stealthMode} name={name} />
         <Spinner />
       </div>
     );
   if (session)
-    return <PublicLibrary name={name} session={session} onLogout={() => setSession(null)} />;
+    return (
+      <PublicLibrary
+        name={name}
+        stealthMode={stealthMode}
+        session={session}
+        onLogout={() => setSession(null)}
+      />
+    );
   return (
     <AuthFrame
+      minimalName={stealthMode ? name : undefined}
       eyebrow="YOUR PARCEL"
       title={
         <>
@@ -171,10 +222,10 @@ function Recipient({ name }: { name: string }) {
     >
       <div className="form-kicker">
         <KeyRound size={19} />
-        <span>领取文件</span>
+        <span>{stealthMode ? '提取文件' : '领取文件'}</span>
       </div>
-      <h2>欢迎来到 {name}</h2>
-      <p className="muted">输入管理员提供的信息，查看可领取的文件。</p>
+      <h2>{stealthMode ? '提取文件' : `欢迎来到 ${name}`}</h2>
+      <p className="muted">输入提取信息，查看文件。</p>
       <form onSubmit={submit} className="stack">
         <Field label="用户 ID" hint="请与管理员发码时填写的标识保持一致，区分大小写。">
           <input
@@ -186,7 +237,7 @@ function Recipient({ name }: { name: string }) {
             placeholder="用户名、邮箱或其他身份标识"
           />
         </Field>
-        <Field label="专属提取码">
+        <Field label={stealthMode ? '提取码' : '专属提取码'}>
           <input
             required
             autoComplete="current-password"
@@ -202,19 +253,22 @@ function Recipient({ name }: { name: string }) {
             <Spinner label="正在验证…" />
           ) : (
             <>
-              打开我的文件 <ArrowRight size={18} />
+              {stealthMode ? '提取文件' : '打开我的文件'} <ArrowRight size={18} />
             </>
           )}
         </button>
       </form>
-      <p className="auth-note">
-        <ShieldCheck size={17} />
-        文件包含与你的领取记录关联的溯源标记。
-      </p>
+      {!stealthMode && (
+        <p className="auth-note">
+          <ShieldCheck size={17} />
+          文件包含与你的领取记录关联的溯源标记。
+        </p>
+      )}
     </AuthFrame>
   );
 }
 function Setup() {
+  const site = useSite();
   const [token, setToken] = useState('');
   const [password, setPassword] = useState('');
   const [repeat, setRepeat] = useState('');
@@ -254,7 +308,7 @@ function Setup() {
         <ShieldCheck size={20} />
         <span>首次设置</span>
       </div>
-      <h2>创建你的 InkParcel</h2>
+      <h2>创建你的 {site.name}</h2>
       <form className="stack" onSubmit={submit}>
         <Field label="初始化令牌" hint="部署时设置的 BOOTSTRAP_TOKEN。">
           <input

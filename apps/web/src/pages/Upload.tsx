@@ -110,7 +110,7 @@ export function UploadModal({
         setProgress(0);
         const source = blobSource(file);
         if (await format.handler.extract(source))
-          throw new Error('此文件已包含 InkParcel 标记，请上传未分发的原始版本。');
+          throw new Error('此文件已包含分发标记，请上传未分发的原始版本。');
         await format.assertMarkable(source);
         abort.signal.throwIfAborted();
         const fingerprint = await format.fingerprint(source, (done, total) => {

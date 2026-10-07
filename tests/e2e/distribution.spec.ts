@@ -120,6 +120,51 @@ test('admin setup, multi-key upload, personal download and local trace', async (
     fullPage: true,
   });
 
+  // Presentation can be simplified without changing recipient authorization or trace behavior.
+  await page.getByRole('link', { name: '站点设置', exact: true }).click();
+  await page.getByRole('checkbox', { name: /隐匿模式/ }).check();
+  await page.getByRole('button', { name: '保存站点设置', exact: true }).click();
+  await expect(page.getByText('站点设置已保存。', { exact: true })).toBeVisible();
+  const simpleContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const simplePage = await simpleContext.newPage();
+  await simplePage.goto(origin);
+  await expect(simplePage.getByRole('heading', { name: '提取文件', exact: true })).toBeVisible();
+  await expect(simplePage).toHaveTitle('文件分享');
+  await expect(simplePage.locator('body')).not.toContainText(
+    /溯源|标记|印记|InkParcel|可验证|来处可循/,
+  );
+  await simplePage.screenshot({
+    path: resolve(screenshotDir, 'simple-access-mobile.png'),
+    fullPage: true,
+  });
+  await simplePage.getByLabel(/^用户 ID/).fill('tester@example.test');
+  await simplePage.getByLabel('提取码', { exact: true }).fill(code);
+  await simplePage.getByRole('button', { name: '提取文件', exact: true }).click();
+  await simplePage.getByRole('button', { name: 'Preview builds', exact: true }).click();
+  await expect(
+    simplePage.getByRole('button', { name: '下载 Preview 1', exact: true }),
+  ).toBeVisible();
+  await expect(simplePage.locator('body')).not.toContainText(
+    /溯源|标记|印记|InkParcel|Early access/,
+  );
+  expect(
+    await simplePage.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+  ).toBeTruthy();
+  await simplePage.screenshot({
+    path: resolve(screenshotDir, 'simple-library-mobile.png'),
+    fullPage: true,
+  });
+  await simplePage.getByRole('button', { name: '退出', exact: true }).click();
+  await expect(simplePage.getByRole('heading', { name: '提取文件', exact: true })).toBeVisible();
+  await simpleContext.close();
+  await page.getByRole('checkbox', { name: /隐匿模式/ }).uncheck();
+  await page.getByRole('button', { name: '保存站点设置', exact: true }).click();
+  await expect(page.getByText('站点设置已保存。', { exact: true })).toBeVisible();
+  await publicPage.reload();
+  await expect(
+    publicPage.getByText('下载文件将写入与你的领取记录关联的专属标记。', { exact: true }),
+  ).toBeVisible();
+
   const records = await page.request.get(`${adminPath}/api/downloads`);
   expect(records.status()).toBe(200);
   const record = (await records.json()).items[0];
@@ -264,13 +309,33 @@ test('admin setup, multi-key upload, personal download and local trace', async (
 
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.getByRole('link', { name: '站点设置', exact: true }).click();
-  await page.getByLabel('站点名称', { exact: true }).fill('InkParcel Preview');
+  await page.getByLabel('站点名称', { exact: true }).fill('示例文件站');
   await page.getByLabel(/^IP 地址保留天数/).fill('0');
   await page.getByLabel(/^管理入口/).fill('manage');
   page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: '保存站点设置', exact: true }).click();
   await expect(page).toHaveURL(`${origin}/manage#settings`);
-  await expect(page.getByLabel('站点名称', { exact: true })).toHaveValue('InkParcel Preview');
+  await expect(page.getByLabel('站点名称', { exact: true })).toHaveValue('示例文件站');
+  await expect(page).toHaveTitle('示例文件站');
+  await expect(page.locator('body')).not.toContainText('InkParcel');
+  await page
+    .getByLabel('上传网站图标', { exact: true })
+    .setInputFiles(resolve('tests/fixtures/site-icon.png'));
+  await expect(page.getByRole('button', { name: '恢复默认图标', exact: true })).toBeVisible();
+  const iconHref = await page.locator('link[rel="icon"]').getAttribute('href');
+  expect(iconHref).toContain('/api/site-icon?v=');
+  const iconResponse = await page.request.get(iconHref!);
+  expect(iconResponse.headers()['content-type']).toBe('image/png');
+  expect(await iconResponse.body()).toEqual(
+    await readFile(resolve('tests/fixtures/site-icon.png')),
+  );
+  await publicPage.goto(origin);
+  await expect(publicPage).toHaveTitle('示例文件站');
+  await expect(publicPage.locator('body')).not.toContainText('InkParcel');
+  await expect(publicPage.locator('.brand img').first()).toHaveAttribute('src', iconHref!);
+  await page.getByRole('button', { name: '恢复默认图标', exact: true }).click();
+  await expect(page.getByRole('button', { name: '恢复默认图标', exact: true })).toHaveCount(0);
+  await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href', '/api/site-icon');
   expect((await page.request.get(adminPath)).status()).toBe(404);
   expect((await page.request.get(`${adminPath}/api/keys`)).status()).toBe(404);
   await page.getByLabel('当前密码', { exact: true }).fill(password);

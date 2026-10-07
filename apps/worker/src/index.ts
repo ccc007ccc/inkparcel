@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { admin } from './admin';
+import { iconUrl } from './site-icon';
 import { cleanup } from './cleanup';
 import { settings } from './db';
 import { publicApi } from './public';
@@ -81,7 +82,22 @@ app.all('*', async (c) => {
     url.search = '';
     const result = await c.env.ASSETS.fetch(new Request(url, { method: c.req.method }));
     if (result.status !== 200) fail(503, 'assets_unavailable', '网页资源尚未构建');
-    const response = new Response(result.body, result);
+    const siteName = current?.site_name || 'InkParcel';
+    const title =
+      current?.stealth_mode && path === '/' && siteName === 'InkParcel' ? '文件分享' : siteName;
+    const rendered = new HTMLRewriter()
+      .on('title', {
+        element(element) {
+          element.setInnerContent(title);
+        },
+      })
+      .on('link[rel="icon"]', {
+        element(element) {
+          element.setAttribute('href', iconUrl(current?.icon_version));
+        },
+      })
+      .transform(result);
+    const response = new Response(rendered.body, rendered);
     response.headers.set('Cache-Control', 'no-store');
     return response;
   }

@@ -55,6 +55,9 @@ export interface PageResult<T> {
   pageSize: number;
 }
 export interface Settings {
+  iconUrl: string;
+  hasCustomIcon: boolean;
+  stealthMode: boolean;
   siteName: string;
   adminPath: string;
   ipRetentionDays: number;

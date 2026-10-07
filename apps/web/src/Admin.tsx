@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { Alert, Brand } from './components';
 import { message, post } from './lib';
+import { useSite } from './site';
 import { FileLibrary } from './pages/Files';
 import { KeyManager } from './pages/Keys';
 import { Downloads, UsersPage } from './pages/Records';
@@ -29,6 +30,7 @@ const tabs = [
   { id: 'settings', label: '站点设置', icon: Settings2 },
 ];
 export function Admin({ base, onLogout }: AdminProps & { onLogout: () => void }) {
+  const site = useSite();
   function current() {
     const hash = location.hash.slice(1).split('?')[0];
     return tabs.some((tab) => tab.id === hash) ? hash : 'files';
@@ -94,7 +96,7 @@ export function Admin({ base, onLogout }: AdminProps & { onLogout: () => void })
           <div className="sidebar-caption">
             交付有序
             <br />
-            来处可循<span>INKPARCEL / WORKSPACE</span>
+            来处可循<span>{site.name} / WORKSPACE</span>
           </div>
           <a href="/" target="_blank" rel="noreferrer">
             <ArrowUpRight size={17} />

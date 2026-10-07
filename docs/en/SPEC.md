@@ -159,6 +159,21 @@ The byte-level format and fingerprint algorithm are defined in [APK format](apk-
 - Trace file stays in the browser; show local processing progress and distinguish
   no marker, malformed marker, invalid authentication and mismatched content.
 
+Optional stealth mode simplifies public login and file-library pages to ordinary file
+retrieval, removing trace explanations, promotional artwork/footer, default InkParcel
+branding and distribution-key names. The default site name becomes “文件分享” in this
+mode; a customized site name is preserved. Loading states, document titles and static
+metadata use neutral wording. User ID/code authentication, ACLs, marking and admin
+tracing remain unchanged. This presentation option is off by default and does not
+conceal the implementation from source/API inspection or improve marker removal resistance.
+
+Site branding is configured once: headers, administration, footers, loading-complete
+views and document titles consume the site name. Saving settings updates the current
+admin page immediately. A custom PNG icon appears in brand headers and the browser
+tab, can be reset, and is stored as a single bounded D1 blob. No third-party image
+host is required. HTML titles escape user-provided text. Initial/loading metadata
+stays neutral while configuration is loading; stealth mode hides promotional text.
+
 ## Acceptance gates
 
 1. Fresh setup, race protection, retired-path 404, login/logout and password/session

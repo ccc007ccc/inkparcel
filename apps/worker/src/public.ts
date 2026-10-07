@@ -1,3 +1,4 @@
+import { iconUrl, defaultIcon } from './site-icon';
 import { Hono } from 'hono';
 import { accessCode, decode, decryptSecret, encode, passwordVerifier } from './crypto';
 import { clearCookie, issueCookie, rateLimit, recipientSession, secretMatches } from './auth';
@@ -18,8 +19,36 @@ import {
 
 export const publicApi = new Hono<Bindings>();
 publicApi.get('/site', (c) =>
-  c.json({ name: c.get('settings')?.site_name || 'InkParcel', initialized: !!c.get('settings') }),
+  c.json({
+    name: c.get('settings')?.site_name || 'InkParcel',
+    initialized: !!c.get('settings'),
+    stealthMode: !!c.get('settings')?.stealth_mode,
+    iconUrl: iconUrl(c.get('settings')?.icon_version),
+  }),
 );
+publicApi.on(['GET', 'HEAD'], '/site-icon', async (c) => {
+  const version = c.get('settings')?.icon_version;
+  if (version) {
+    const icon = await c.env.DB.prepare('SELECT bytes FROM site_icon WHERE id = 1 AND version = ?')
+      .bind(version)
+      .first<{ bytes: number[] }>();
+    if (icon)
+      return new Response(c.req.method === 'HEAD' ? null : new Uint8Array(icon.bytes), {
+        headers: {
+          'Content-Type': 'image/png',
+          'Cache-Control': 'no-store',
+          'X-Content-Type-Options': 'nosniff',
+        },
+      });
+  }
+  return new Response(c.req.method === 'HEAD' ? null : defaultIcon, {
+    headers: {
+      'Content-Type': 'image/svg+xml',
+      'Cache-Control': 'no-store',
+      'X-Content-Type-Options': 'nosniff',
+    },
+  });
+});
 publicApi.get('/setup', (c) => {
   if (c.get('settings')) fail(404, 'not_found', '页面不存在');
   return c.json({ available: true });

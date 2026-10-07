@@ -1,3 +1,4 @@
+import { useSite } from '../site';
 import { useRef, useState, useEffect, type FormEvent } from 'react';
 import {
   AlertTriangle,
@@ -61,7 +62,7 @@ export function TracePage({ base }: AdminProps) {
       const marker = await format.handler.extract(source);
       if (current !== run.current) return;
       if (!marker) {
-        setError('未找到 InkParcel 标记。该文件可能尚未经过本站分发，或标记已被移除。');
+        setError('未找到本站标记。该文件可能尚未经过本站分发，或标记已被移除。');
         return;
       }
       setStage('hashing');
@@ -239,10 +240,12 @@ export function TracePage({ base }: AdminProps) {
   );
 }
 export function SettingsPage({ base }: AdminProps) {
+  const site = useSite();
   const [settings, setSettings] = useState<Settings>();
   const [name, setName] = useState('');
   const [path, setPath] = useState('');
   const [days, setDays] = useState(30);
+  const [stealthMode, setStealthMode] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [busy, setBusy] = useState(false);
@@ -251,6 +254,8 @@ export function SettingsPage({ base }: AdminProps) {
   const [repeat, setRepeat] = useState('');
   const [passwordBusy, setPasswordBusy] = useState(false);
   const [passwordError, setPasswordError] = useState('');
+  const [iconBusy, setIconBusy] = useState(false);
+  const [iconError, setIconError] = useState('');
   useEffect(() => {
     api<Settings>(`${base}/api/settings`)
       .then((value) => {
@@ -258,6 +263,7 @@ export function SettingsPage({ base }: AdminProps) {
         setName(value.siteName);
         setPath(value.adminPath);
         setDays(value.ipRetentionDays);
+        setStealthMode(value.stealthMode);
       })
       .catch((error) => setError(message(error)));
   }, [base]);
@@ -277,17 +283,53 @@ export function SettingsPage({ base }: AdminProps) {
         siteName: name,
         adminPath: path,
         ipRetentionDays: days,
+        stealthMode,
       });
       if (next.adminPath !== settings.adminPath) {
         location.assign(`${next.adminPath}#settings`);
         return;
       }
       setSettings(next);
+      await site.refresh();
       setSuccess('站点设置已保存。');
     } catch (error) {
       setError(message(error));
     } finally {
       setBusy(false);
+    }
+  }
+  async function updateIcon(file?: File) {
+    setIconBusy(true);
+    setIconError('');
+    try {
+      if (file) {
+        if (file.size > 256 * 1024) throw new Error('图标不能超过 256 KiB。');
+        let image: ImageBitmap;
+        try {
+          image = await createImageBitmap(file);
+        } catch {
+          throw new Error('无法读取图片，请选择有效的 PNG 文件。');
+        }
+        const valid = image.width <= 1024 && image.height <= 1024;
+        image.close();
+        if (!valid) throw new Error('图标宽高不能超过 1024 像素。');
+      }
+      const result = await api<{ iconUrl: string; hasCustomIcon: boolean }>(
+        `${base}/api/site-icon`,
+        file
+          ? {
+              method: 'PUT',
+              headers: { 'Content-Type': 'image/png' },
+              body: file,
+            }
+          : { method: 'DELETE' },
+      );
+      setSettings((previous) => (previous ? { ...previous, ...result } : previous));
+      await site.refresh();
+    } catch (error) {
+      setIconError(message(error));
+    } finally {
+      setIconBusy(false);
     }
   }
   async function changePassword(event: FormEvent) {
@@ -339,6 +381,52 @@ export function SettingsPage({ base }: AdminProps) {
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                 />
+              </Field>
+              <div className="field">
+                <span>网站图标</span>
+                <div className="site-icon-settings">
+                  <img src={site.iconUrl} alt="当前网站图标" width={48} height={48} />
+                  <input
+                    type="file"
+                    accept="image/png,.png"
+                    aria-label="上传网站图标"
+                    disabled={iconBusy}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      event.target.value = '';
+                      if (file) void updateIcon(file);
+                    }}
+                  />
+                  {settings?.hasCustomIcon && (
+                    <button
+                      type="button"
+                      className="button button-secondary"
+                      disabled={iconBusy}
+                      onClick={() => void updateIcon()}
+                    >
+                      恢复默认图标
+                    </button>
+                  )}
+                </div>
+                <small>
+                  PNG 图片，最大 256 KiB，宽高不超过 1024
+                  像素，建议正方形。上传后立即应用于页眉和浏览器标签页。
+                </small>
+                {iconBusy && <Spinner label="正在更新图标…" />}
+                <Alert>{iconError}</Alert>
+              </div>
+              <Field
+                label="隐匿模式"
+                hint="开启后只显示提取、文件列表和下载，隐藏溯源说明与项目宣传。标记和后台溯源照常工作；此选项不增强标记的抗移除能力。"
+              >
+                <span className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={stealthMode}
+                    onChange={(event) => setStealthMode(event.target.checked)}
+                  />
+                  使用简洁领取页
+                </span>
               </Field>
               <Field
                 label="管理入口"
@@ -430,7 +518,7 @@ export function SettingsPage({ base }: AdminProps) {
         </>
       )}
       <div className="settings-brand">
-        <span className="brand-word">InkParcel</span>
+        <span className="brand-word">{site.name}</span>
         <span>每一份，都有来处。</span>
         <p>开放源代码 · 自托管文件分发</p>
       </div>

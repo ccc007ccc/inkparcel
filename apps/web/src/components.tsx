@@ -7,18 +7,22 @@ import {
   Clipboard,
   FolderOpen,
   LoaderCircle,
-  Package,
   Search,
   X,
 } from 'lucide-react';
 import { copy, type Folder, type Key } from './lib';
-export function Brand({ compact = false }: { compact?: boolean }) {
+import { useSite } from './site';
+export function Brand({ compact = false, name }: { compact?: boolean; name?: string }) {
+  const site = useSite();
   return (
     <div className="brand">
       <span className="brand-symbol">
-        <Package size={21} strokeWidth={1.6} />
+        <img src={site.iconUrl} alt="" width={24} height={24} />
       </span>
-      <span>InkParcel{!compact && <small>每一份，都有来处</small>}</span>
+      <span>
+        {name ?? site.name}
+        {!compact && <small>每一份，都有来处</small>}
+      </span>
     </div>
   );
 }

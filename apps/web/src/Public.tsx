@@ -30,10 +30,12 @@ interface Library {
 }
 export function PublicLibrary({
   name,
+  stealthMode,
   session,
   onLogout,
 }: {
   name: string;
+  stealthMode: boolean;
   session: Session;
   onLogout: () => void;
 }) {
@@ -86,7 +88,7 @@ export function PublicLibrary({
   return (
     <div className="public-page">
       <header className="site-header">
-        <Brand />
+        <Brand compact={stealthMode} name={name} />
         <button className="button button-quiet" onClick={() => void logout()}>
           <LogOut size={16} />
           退出
@@ -95,18 +97,20 @@ export function PublicLibrary({
       <main className="public-main">
         <section className="public-intro">
           <div>
-            <span className="eyebrow">YOUR PERSONAL LIBRARY</span>
+            {!stealthMode && <span className="eyebrow">YOUR PERSONAL LIBRARY</span>}
             <h1>{name}</h1>
             <p>
               你好，<strong>{session.user.userId}</strong>。你的文件已准备就绪。
             </p>
           </div>
-          <div className="recipient-seal">
-            <ShieldCheck size={23} />
-            <span>
-              专属访问<small>{session.key.name}</small>
-            </span>
-          </div>
+          {!stealthMode && (
+            <div className="recipient-seal">
+              <ShieldCheck size={23} />
+              <span>
+                专属访问<small>{session.key.name}</small>
+              </span>
+            </div>
+          )}
         </section>
         <div className="library-top">
           <Breadcrumbs folders={library?.breadcrumbs ?? []} onChange={navigate} />
@@ -152,7 +156,7 @@ export function PublicLibrary({
                       </div>
                       <button
                         className="button button-secondary"
-                        aria-label={`领取 ${file.name}`}
+                        aria-label={`${stealthMode ? '下载' : '领取'} ${file.name}`}
                         disabled={busy === file.id}
                         onClick={() => void download(file)}
                       >
@@ -161,7 +165,7 @@ export function PublicLibrary({
                         ) : (
                           <>
                             <ArrowDownToLine size={17} />
-                            <span>领取文件</span>
+                            <span>{stealthMode ? '下载' : '领取文件'}</span>
                           </>
                         )}
                       </button>
@@ -184,15 +188,19 @@ export function PublicLibrary({
             </>
           )
         )}
-        <p className="delivery-note">
-          <ShieldCheck size={17} />
-          下载文件将写入与你的领取记录关联的专属标记。
-        </p>
+        {!stealthMode && (
+          <p className="delivery-note">
+            <ShieldCheck size={17} />
+            下载文件将写入与你的领取记录关联的专属标记。
+          </p>
+        )}
       </main>
-      <footer className="site-footer">
-        <span>Powered by InkParcel</span>
-        <span>一份文件，一枚印记。</span>
-      </footer>
+      {!stealthMode && (
+        <footer className="site-footer">
+          <span>{name}</span>
+          <span>一份文件，一枚印记。</span>
+        </footer>
+      )}
     </div>
   );
 }

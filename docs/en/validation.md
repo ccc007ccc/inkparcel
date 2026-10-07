@@ -8,8 +8,8 @@ These results do not establish Cloudflare Free CPU acceptance.
 ## Local acceptance
 
 - `pnpm check` passes formatting, relative documentation links/anchors, all TypeScript
-  checks, 57 package tests and the Vite/Worker production build with deployment dry run.
-  The package split is 29 binary, 15 Worker integration and 13 browser-logic tests.
+  checks, 59 package tests and the Vite/Worker production build with deployment dry run.
+  The package split is 29 binary, 17 Worker integration and 13 browser-logic tests.
 - Worker integration uses actual local Workerd with D1 migrations and R2 bindings:
   protected/concurrent setup, old-path 404, HTTPS/Origin enforcement, password/session
   invalidation, cross-key isolation, user controls, folders, 100-key bulk ACL updates,
@@ -47,6 +47,15 @@ and ACL cleanup, rejected restoration, historical tracing, short-path normalizat
 reserved paths and retired-path 404. Browser checks cover cancel/confirm deletion,
 entering `manage` directly and tracing after identity deletion. Migration
 `0002_identity_deletion.sql` was applied against real local D1.
+
+The stealth/branding batch passed `pnpm check` (59 tests) and Chromium E2E.
+It covers administrator-only mode changes, marking while stealth is enabled,
+restored standard presentation, neutral mobile login/library pages, escaped HTML
+titles, global site-name updates and PNG upload/size/type/dimension validation.
+Icon retrieval preserves bytes; replacement uses a new URL and one database row;
+reset returns the built-in icon. Browser checks confirm header/tab icon updates and
+reset, with no fixed InkParcel branding after a custom site name is saved. The 390 px
+minimal login and library screenshots were visually inspected.
 
 ## Continuous integration
 

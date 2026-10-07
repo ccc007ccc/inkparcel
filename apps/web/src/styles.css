@@ -2172,3 +2172,30 @@ progress::-moz-progress-bar {
     transition-duration: 0.01ms !important;
   }
 }
+
+.simple-access {
+  width: min(100%, 480px);
+  padding: 48px 20px;
+  margin: auto;
+}
+
+.brand-symbol img,
+.site-icon-settings img {
+  object-fit: contain;
+  border-radius: 5px;
+}
+.site-icon-settings {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.site-icon-settings input {
+  min-width: 0;
+  max-width: 100%;
+  flex: 1 1 200px;
+}
+.brand > span:last-child {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}

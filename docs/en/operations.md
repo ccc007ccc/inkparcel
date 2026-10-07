@@ -42,6 +42,26 @@ personal data or provenance. Historical records remain and editing cannot restor
 identity. Key deletion clears file permissions and folder defaults. A deleted user ID
 cannot auto-register with an old code. Use blocking/disabling if access may need restoring.
 
+## Public-page presentation
+
+Enable **隐匿模式** in site settings and save to show a minimal retrieval page without
+marker explanations or project promotion. Refresh the public page to load the setting.
+Disable it to restore the standard presentation. It is off by default. User ID and
+code are still required; downloads continue to receive markers and remain traceable
+in administration. Use a neutral custom site name if desired. This is a presentation
+option, not a guarantee that the marker or software cannot be identified.
+Apply `0003_stealth_mode.sql` before deploying this version.
+
+## Site name and icon
+
+Saving the site name updates public and administrative branding, footers and page
+titles; the current admin page refreshes its branding immediately. In site settings,
+upload a PNG icon (up to 256 KiB, at most 1024×1024 pixels; square recommended).
+Uploading applies immediately, separately from saving the settings form. The same
+icon appears in headers and browser tabs; Reset restores the built-in icon. Other
+open pages pick up changes on reload. Icons are included in D1 backups. Apply
+`0004_site_icon.sql` before deploying this functionality.
+
 ## Administrator access
 
 Change the password through Settings while authenticated. Enter the current

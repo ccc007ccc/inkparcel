@@ -1,3 +1,4 @@
+import { iconUrl, readIcon } from './site-icon';
 import { Hono } from 'hono';
 import {
   accessCode,
@@ -408,33 +409,63 @@ admin.post('/trace', async (c) => {
     signedName: marker.claims.name,
   });
 });
+admin.put('/site-icon', async (c) => {
+  const bytes = await readIcon(c);
+  const version = crypto.randomUUID();
+  await c.env.DB.batch([
+    c.env.DB.prepare(
+      'INSERT INTO site_icon (id, version, bytes) VALUES (1, ?, ?) ON CONFLICT(id) DO UPDATE SET version = excluded.version, bytes = excluded.bytes',
+    ).bind(version, bytes.buffer),
+    c.env.DB.prepare('UPDATE settings SET icon_version = ? WHERE id = 1').bind(version),
+  ]);
+  return c.json({ iconUrl: iconUrl(version), hasCustomIcon: true });
+});
+admin.delete('/site-icon', async (c) => {
+  await c.env.DB.batch([
+    c.env.DB.prepare('UPDATE settings SET icon_version = NULL WHERE id = 1'),
+    c.env.DB.prepare('DELETE FROM site_icon WHERE id = 1'),
+  ]);
+  return c.json({ iconUrl: iconUrl(), hasCustomIcon: false });
+});
 admin.get('/settings', (c) => {
   const s = c.get('settings')!;
   return c.json({
     siteName: s.site_name,
+    stealthMode: !!s.stealth_mode,
+    iconUrl: iconUrl(s.icon_version),
+    hasCustomIcon: !!s.icon_version,
     adminPath: s.admin_path,
     ipRetentionDays: s.ip_retention_days,
   });
 });
 admin.patch('/settings', async (c) => {
   const input = await body(c);
-  fields(input, ['siteName', 'adminPath', 'ipRetentionDays']);
+  fields(input, ['siteName', 'adminPath', 'ipRetentionDays', 'stealthMode']);
   const current = c.get('settings')!;
   const siteName =
     input.siteName === undefined ? current.site_name : text(input.siteName, '站点名称', 80);
   const path = input.adminPath === undefined ? current.admin_path : adminPath(input.adminPath);
+  const stealthMode =
+    input.stealthMode === undefined ? !!current.stealth_mode : boolean(input.stealthMode);
   const retention =
     input.ipRetentionDays === undefined
       ? current.ip_retention_days
       : integer(input.ipRetentionDays, 0, 3650);
   await c.env.DB.prepare(
-    'UPDATE settings SET site_name = ?, admin_path = ?, ip_retention_days = ? WHERE id = 1',
+    'UPDATE settings SET site_name = ?, admin_path = ?, ip_retention_days = ?, stealth_mode = ? WHERE id = 1',
   )
-    .bind(siteName, path, retention)
+    .bind(siteName, path, retention, Number(stealthMode))
     .run();
   if (retention === 0)
     await c.env.DB.prepare('UPDATE downloads SET ip = NULL WHERE ip IS NOT NULL').run();
-  return c.json({ siteName, adminPath: path, ipRetentionDays: retention });
+  return c.json({
+    siteName,
+    adminPath: path,
+    ipRetentionDays: retention,
+    stealthMode,
+    iconUrl: iconUrl(current.icon_version),
+    hasCustomIcon: !!current.icon_version,
+  });
 });
 admin.post('/password', async (c) => {
   await rateLimit(c, 'password-change', 20);
