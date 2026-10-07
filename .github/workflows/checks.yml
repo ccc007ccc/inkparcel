@@ -27,8 +27,9 @@ jobs:
           distribution: temurin
           java-version: 17
       - uses: android-actions/setup-android@v3
-      - name: Install Android fixture tools
-        run: sdkmanager 'build-tools;36.0.0' 'platforms;android-36'
+        with:
+          packages: 'build-tools;36.0.0 platforms;android-36'
+          log-accepted-android-sdk-licenses: false
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm fixtures
