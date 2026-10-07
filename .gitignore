@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.wrangler/
+.dev.vars
+.env
+.env.*
+!.env.example
+coverage/
+playwright-report/
+test-results/
+target/
+*.log
+*.apk
+*.idsig
+*.jks
+*.keystore
+.DS_Store

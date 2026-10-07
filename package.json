@@ -1,0 +1,26 @@
+{
+  "name": "inkparcel",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@9.15.9",
+  "engines": { "node": ">=22.0.0" },
+  "scripts": {
+    "dev": "pnpm build:web && concurrently -k \"vite build --watch\" \"wrangler dev\"",
+    "build:web": "vite build",
+    "build": "pnpm build:web && wrangler deploy --dry-run",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "check": "pnpm typecheck && pnpm test && pnpm build",
+    "db:migrate": "wrangler d1 migrations apply inkparcel --local",
+    "deploy": "pnpm build:web && wrangler deploy"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "concurrently": "^9.2.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.2.0",
+    "vitest": "^4.1.0",
+    "wrangler": "^4.148.0"
+  }
+}
