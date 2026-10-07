@@ -130,5 +130,12 @@ downloadRoutes.on(['GET', 'HEAD'], '/downloads/:id', async (c) => {
   )
     .bind(receipt.id)
     .run();
-  return new Response(await marked.stream(range), { status: range ? 206 : 200, headers });
+  // Cloudflare derives Content-Length from the body, ignoring a manually supplied
+  // value for an ordinary ReadableStream. Keep full and range responses fixed-size
+  // without buffering them. pipeTo forwards source errors and downstream cancellation.
+  const fixed = new FixedLengthStream(size);
+  void (await marked.stream(range)).pipeTo(fixed.writable).catch(() => {
+    // The response stream already receives the failure (or client cancellation).
+  });
+  return new Response(fixed.readable, { status: range ? 206 : 200, headers });
 });

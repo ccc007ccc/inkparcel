@@ -483,6 +483,7 @@ describe('authorized files and stable marked transfers', () => {
     const response = await call(receipt.url, 'GET', undefined, alpha.cookie);
     const full = new Uint8Array(await response.arrayBuffer());
     expect(full.length).toBe(Number(head.headers.get('Content-Length')));
+    expect(response.headers.get('Content-Length')).toBe(String(full.length));
     expect(response.headers.get('ETag')).toBe(head.headers.get('ETag'));
     expect(response.headers.get('Cache-Control')).toBe('private, no-store');
     const partial = await call(receipt.url, 'GET', undefined, alpha.cookie, {
@@ -490,8 +491,10 @@ describe('authorized files and stable marked transfers', () => {
       'If-Range': head.headers.get('ETag')!,
     });
     expect(partial.status).toBe(206);
+    expect(partial.headers.get('Content-Length')).toBe(String(full.slice(100, 4301).length));
     expect(new Uint8Array(await partial.arrayBuffer())).toEqual(full.slice(100, 4301));
     const suffix = await call(receipt.url, 'GET', undefined, alpha.cookie, { Range: 'bytes=-32' });
+    expect(suffix.headers.get('Content-Length')).toBe('32');
     expect(new Uint8Array(await suffix.arrayBuffer())).toEqual(full.slice(-32));
     const ignored = await call(receipt.url, 'GET', undefined, alpha.cookie, {
       Range: 'bytes=1-10',
