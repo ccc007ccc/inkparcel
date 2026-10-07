@@ -866,6 +866,7 @@ a svg {
   flex-shrink: 0;
 }
 .table-wrap {
+  position: relative;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #fff;
