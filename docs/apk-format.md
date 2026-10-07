@@ -1,135 +1,65 @@
-# APK marker format
+# APK 标记格式
 
-This document defines the `@inkparcel/marking` v0.1 binary contract; tested signing
-combinations and deployment acceptance belong in [validation](validation.md).
+简体中文 | [English](en/apk-format.md)
 
-## Supported layout
+本文定义 `@inkparcel/marking` v0.1 的二进制契约；已测试的签名组合与部署验收见[验证记录](validation.md)。
 
-The handler accepts a single-disk ZIP32 APK with an existing v2 signing entry
-(`0x7109871a`). Additional v3 (`0xf05368c0`) and v3.1 (`0x1b93ad61`) entries are
-preserved byte for byte. A v3-only file, v1-only file, split ZIP or ZIP64 file is
-rejected. The file size may exceed 2 GiB but must not exceed 4 GiB minus one byte;
-rewritten directory offsets must also fit the supported ZIP32 range.
+## 支持的布局
 
-`inspectApk` checks the EOCD ending/comment, disk and directory fields, directory
-position and header, signing-block magic and matching sizes, and every entry
-boundary. It requires a v2 entry. This is bounded structural inspection, **not**
-cryptographic APK signature verification, decompression, or validation of every ZIP
-entry and inner signature record. The administrator supplying an original is the
-upload trust boundary. A recognizable signature ID alone does not establish that
-its signature is valid. Release fixtures independently use Android `apksigner` to
-verify originals and personalized outputs.
+处理器接受单磁盘 ZIP32 APK，必须已有 v2 签名条目（`0x7109871a`）。附加 v3（`0xf05368c0`）和 v3.1（`0x1b93ad61`）条目逐字节保留。拒绝仅 v3、仅 v1、分卷 ZIP 和 ZIP64。文件可大于 2 GiB，但不能超过 4 GiB 减 1 字节；改写后的目录偏移也必须在 ZIP32 范围内。
 
-Every parser read requests at most 64 KiB. The complete signing block is limited to
-16 MiB and 4096 entries. Markers are 1 byte through 16 KiB. These are application
-limits to keep memory and parsing bounded, rather than Android format limits.
-Lengths are decoded as unsigned little-endian integers, with 64-bit fields checked
-before conversion to JavaScript numbers.
+`inspectApk` 检查 EOCD 结尾/注释、磁盘和目录字段、目录位置与头部、签名块魔数与一致的大小、每个条目边界，并要求存在 v2 条目。这是有界结构检查，**不等于** APK 密码学签名验证、解压或逐一验证 ZIP 条目与内部签名记录。上传信任边界是提供原文件的管理员；仅存在可识别签名 ID 不代表签名有效。发布样本独立使用 Android `apksigner` 验证原文件及个性化输出。
 
-Publication also calls `assertApkMarkable`: it parses once, rejects an existing
-InkParcel marker, and checks that **every** marker size from 1 byte through 16 KiB
-fits the entry, block-size and output-offset limits. This does not stream the
-payload or allocate hypothetical marked outputs. It checks the maximum length and
-one byte less because an exactly page-aligned block needs no padding, while a
-shorter marker can require another page and another entry. A structurally valid
-original may fail this capacity check, for example at 4096 entries or near 4 GiB.
+解析器每次最多读取 64 KiB，整个签名块最多 16 MiB、4096 个条目，标记大小为 1 字节至 16 KiB。这些是为约束内存与解析成本设置的应用限制，并非 Android 格式限制。长度按无符号小端整数解析；64 位字段转换为 JavaScript 数值前必须检查。
 
-## Marking
+入库前还调用 `assertApkMarkable`：解析一次、拒绝现有 InkParcel 标记，并检查 1 字节到 16 KiB 的**所有**标记大小均符合条目、块大小和输出偏移限制。该操作不读取完整载荷，也不分配假想输出。检查最大长度及比它少 1 字节的长度，是因为恰好页对齐的块不需填充，而略短标记可能额外需要一页和一个条目。结构有效的原文件仍可能因已有 4096 个条目或接近 4 GiB 而无法通过容量检查。
 
-InkParcel uses the dedicated outer APK Signing Block entry ID `0x49504b31` (`IPK1`)
-and stores the opaque authenticated envelope as its value. This is a project ID,
-not an Android-assigned signature scheme. Authentication and user mappings belong
-to the application; the binary package has no access to secrets or recipient IDs.
+## 写入标记
 
-The transformation preserves the bytes before the signing block, all existing
-non-padding entries in their original order, and the Central Directory. It appends
-one InkParcel entry, rebuilds outer block sizes, and updates the EOCD Central
-Directory offset. Unknown duplicate IDs remain separate entries. Duplicate known
-signature IDs, InkParcel entries, or verity padding entries are rejected to avoid
-ambiguous interpretation. Marking an already marked original is also rejected.
+InkParcel 使用 APK 签名块独立外层条目 ID `0x49504b31`（`IPK1`），值为语义不透明的认证封装。这是项目自选 ID，不是 Android 分配的签名方案。认证和用户映射属于应用层，二进制包无法访问秘密值或领取者 ID。
 
-The verity padding entry (`0x42726577`) is regenerated with zero bytes. Existing
-4096-byte-aligned block capacity is reused when sufficient. Otherwise the new block
-grows to an aligned size, with at least 12 bytes for a padding entry when present.
-The signing block's starting offset never moves. This preserves the alignment
-requirements of APK verity for originals that already satisfy those requirements.
-The handler does not repair an originally invalid signature or alignment.
+变换保留签名块之前的全部字节、所有现有非填充条目的原始顺序，以及中央目录。追加一个 InkParcel 条目，重建外层块大小，并更新 EOCD 中央目录偏移。未知的重复 ID 保持为独立条目；已知签名 ID、InkParcel 条目或 verity 填充条目出现重复时拒绝，避免歧义。拒绝对已有标记的原文件再次写入。
 
-APK v2/v3-family signatures exclude mutable outer signing-block entries from their
-content digest and normalize the EOCD offset. Android ignores unknown outer IDs,
-which permits this transformation without the publisher's APK signing private key.
-The separate v4 `.idsig` covers all APK bytes and is invalidated by personalization;
-InkParcel distributes ordinary APK downloads, not reused `.idsig` files or
-incremental-install packages.
+verity 填充条目（`0x42726577`）用零字节重新生成。现有 4096 字节对齐的块容量足够时复用，否则扩展到对齐大小；存在填充条目时至少为它保留 12 字节。签名块起始偏移不变，从而保留原本符合 APK verity 要求的对齐关系。处理器不会修复原本无效的签名或对齐。
 
-## Canonical fingerprint version 1
+APK v2/v3 系列内容摘要排除可变的外层签名块条目，并规范化 EOCD 偏移；Android 忽略未知外层 ID，因此无需发布者 APK 签名私钥即可执行变换。独立的 v4 `.idsig` 覆盖全部 APK 字节，个性化后会失效。InkParcel 分发普通 APK，不复用 `.idsig`，也不提供增量安装包。
 
-The fingerprint is lowercase hexadecimal SHA-256 of the following canonical APK:
+## 规范化指纹版本 1
 
-1. Preserve every byte before the APK Signing Block.
-2. Remove the InkParcel entry and verity padding entry from the signing block.
-3. Preserve all remaining entry bytes and ordering, including complete v2/v3-family
-   signature and certificate data and all unknown entries.
-4. Recalculate both outer signing-block size fields and retain the standard magic.
-5. Preserve the Central Directory verbatim.
-6. Preserve the EOCD and its comment, changing only the Central Directory offset to
-   point immediately after the canonical signing block.
+对以下规范化 APK 计算 SHA-256，并输出小写十六进制：
 
-The canonical representation is for hashing and is not an installable output
-contract: it deliberately omits verity padding. Original and marked APKs have the
-same fingerprint. Changing a recipient marker or padding does not change it;
-changing payload, retained metadata or signing identity does. This is not a ZIP
-content-only hash and does not promise equality after rebuilding or resigning an
-otherwise equivalent application. Future normalization changes require a new
-handler/fingerprint version, not a silent reinterpretation of stored fingerprints.
+1. 保留 APK 签名块之前的每个字节。
+2. 移除签名块中的 InkParcel 和 verity 填充条目。
+3. 保留其余条目的全部字节与顺序，包括完整 v2/v3 系列签名、证书数据和所有未知条目。
+4. 重算两个外层签名块大小字段，保留标准魔数。
+5. 逐字节保留中央目录。
+6. 保留 EOCD 与注释，仅修改中央目录偏移，使其紧接规范化签名块。
 
-`fingerprintApk` hashes this virtual file incrementally with `@noble/hashes`. Its
-optional progress callback reports canonical bytes processed and canonical total
-size. The browser computes it during upload and tracing. Large-file fingerprinting
-must not run in a Worker request.
+规范化表示仅用于哈希，不承诺可安装；它有意移除 verity 填充。原始 APK 与带标记 APK 指纹相同。修改领取标记或填充不改变指纹，修改载荷、保留的元数据或签名身份则会改变。该指纹不是仅针对 ZIP 内容的哈希，不保证重新构建或重签后的等效应用指纹相等。未来变更规范化算法必须使用新的处理器/指纹版本，不得悄悄重释存储中的旧指纹。
 
-## Streams and tracing
+`fingerprintApk` 使用 `@noble/hashes` 增量计算虚拟文件哈希，可选进度回调返回已处理规范化字节数及总数。浏览器在上传和溯源时计算，大文件指纹不得在 Worker 请求中计算。
 
-`ByteSource` describes immutable bytes with exact-length bounded reads and range
-streams. `blobSource` implements it using browser `Blob.slice`. The Worker supplies
-an R2 adapter bound to an immutable object. `mark` returns a stable virtual file:
-unchanged source ranges interleaved with replacement byte segments. It does not
-store or buffer an entire personalized artifact.
+## 流与溯源
 
-`MarkedFile.stream({offset,length})` uses offsets in the **personalized** file,
-including ranges crossing replacement boundaries. Calls for the same source and
-marker produce the same bytes and length. Invalid ranges reject; source truncation,
-excess streamed bytes and read failures propagate. Cancellation reaches the active
-source stream. HTTP range parsing, authorization, HEAD, ETag and issuance lifetime
-are responsibilities of the Worker layer.
+`ByteSource` 描述不可变字节，提供精确长度的有界读取和范围流。`blobSource` 使用浏览器 `Blob.slice` 实现，Worker 提供绑定不可变对象的 R2 适配器。`mark` 返回稳定的虚拟文件，将未改变的原文件范围与替换字节片段交织，不保存或缓冲完整个性化文件。
 
-The browser's `extract` reads only bounded tail/signing-block data and returns a
-copied opaque marker or `null`. It does not upload the file. Local fingerprinting
-requires reading all canonical bytes, but never buffers the complete file. The
-application separately displays marker authenticity, content fingerprint match and
-issuance metadata. A valid marker establishes an issuance record; it can be removed
-or copied and does not prove who leaked a file. See [the product contract](SPEC.md#marker-and-apk-contracts).
+`MarkedFile.stream({offset,length})` 的偏移以**个性化文件**为准，支持跨越替换边界的范围。同一数据源与标记产生相同字节和长度；无效范围被拒绝，源截断、超量流字节与读取失败会向上传播，取消传递给活跃源流。HTTP 范围解析、授权、HEAD、ETag 与签发生命周期由 Worker 负责。
 
-## Format registration
+浏览器 `extract` 只读取有界尾部/签名块数据，返回独立复制的标记或 `null`，不上传文件。本地指纹需要读取全部规范化字节，但不缓冲完整文件。应用分别显示标记真实性、内容指纹匹配及签发元数据。有效标记对应签发记录，但可能被移除或复制，不能证明谁泄露文件。见[产品契约](SPEC.md#标记与-apk-契约)。
 
-`formatFor(filename)` returns the registered `id`, `version`, `extensions`,
-`mediaType`, `handler`, `fingerprint` and `assertMarkable` capabilities.
-`supportedExtensions` contains the leading-dot extensions for browser file
-pickers. `handlerFor` remains a compatibility shorthand for `.handler`.
-The APK descriptor is `id: apk`, `version: apk-v1` and `.apk`; version identifies
-the persisted marking/fingerprint contract. `mark` and `extract` remain the two
-functions on the marker handler. Preflight and fingerprinting are capabilities
-of the surrounding format adapter, not part of envelope generation.
+## 格式注册
 
-New formats provide an adapter and add one registry entry in
-`packages/marking/src/registry.ts`. Uploads, downloads and browser tracing consume
-the descriptor rather than branching on APK names or hardcoding a media type.
+`formatFor(filename)` 返回注册的 `id`、`version`、`extensions`、`mediaType`、`handler`、`fingerprint` 和 `assertMarkable`。`supportedExtensions` 提供带前导点的扩展名供文件选择器使用，`handlerFor` 保留为 `.handler` 的兼容简写。
 
-## References
+APK 描述符为 `id: apk`、`version: apk-v1`、扩展名 `.apk`；版本标识持久化的标记/指纹契约。标记处理器仍仅有 `mark` 和 `extract` 两个函数；预检与指纹属于外围格式适配器，不参与认证封装生成。
 
-- [Android v2 format and integrity-protected contents](https://source.android.com/docs/security/features/apksigning/v2)
-- [Android v3 format](https://source.android.com/docs/security/features/apksigning/v3)
-- [Android v3.1 signing blocks](https://source.android.com/docs/security/features/apksigning/v3-1)
-- [Android v4 and `.idsig`](https://source.android.com/docs/security/features/apksigning/v4)
-- [AOSP signing-block and ZIP64 checks](https://android.googlesource.com/platform/frameworks/base/+/master/core/java/android/util/apk/ApkSigningBlockUtils.java)
-- [AOSP apksig verity padding](https://android.googlesource.com/platform/tools/apksig/+/master/src/main/java/com/android/apksig/internal/apk/ApkSigningBlockUtils.java)
+新格式提供适配器，并在 `packages/marking/src/registry.ts` 添加一个注册项。上传、下载和浏览器溯源消费描述符，不按 APK 名称分支，也不硬编码媒体类型。
+
+## 参考资料
+
+- [Android v2 格式与完整性保护内容](https://source.android.com/docs/security/features/apksigning/v2)
+- [Android v3 格式](https://source.android.com/docs/security/features/apksigning/v3)
+- [Android v3.1 签名块](https://source.android.com/docs/security/features/apksigning/v3-1)
+- [Android v4 与 `.idsig`](https://source.android.com/docs/security/features/apksigning/v4)
+- [AOSP 签名块与 ZIP64 检查](https://android.googlesource.com/platform/frameworks/base/+/master/core/java/android/util/apk/ApkSigningBlockUtils.java)
+- [AOSP apksig verity 填充](https://android.googlesource.com/platform/tools/apksig/+/master/src/main/java/com/android/apksig/internal/apk/ApkSigningBlockUtils.java)

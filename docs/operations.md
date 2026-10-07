@@ -1,148 +1,71 @@
-# Operations
+# 运维指南
 
-This guide covers current InkParcel administration, recovery and maintenance;
-the authorization and marker contracts remain in [SPEC](SPEC.md).
+简体中文 | [English](en/operations.md)
 
-## Keys, recipients and files
+本文介绍当前 InkParcel 的管理、恢复与维护；权限与标记契约见[产品规格](SPEC.md)。
 
-The initial service supports one administrator, up to 100 distribution keys and
-1000 folders. Give keys meaningful names; their IDs and code prefixes are immutable.
-Imported secrets must be 32-byte unpadded base64url and duplicates are rejected.
-The secret is shown only when creating/importing a key. Keep any required export
-in your secret manager; normal key listings do not reveal it.
+## 密钥、领取者与文件
 
-Choose a recipient ID convention and use it consistently. IDs are trimmed and
-normalized to Unicode NFC but remain case-sensitive. The same normalized ID shares
-one user record across keys, while each login uses only its authenticated key's
-file permissions. Auto-registration occurs after successful code verification.
+初版支持一个管理员，最多 100 个分发密钥和 1000 个文件夹。为密钥设置有意义的名称，ID 与提取码前缀不可变。导入秘密值必须是 32 字节无填充 base64url，重复值被拒绝。秘密值只在创建/导入时展示，需要导出时保存在秘密管理器；普通列表不会显示。
 
-Folder defaults only preselect keys for new uploads. File permissions are explicit;
-moving files or changing defaults does not change existing permissions. An empty
-file key selection means administrator-only. A same-name upload is a new immutable
-version, not replacement of the earlier object. Supported layouts and binary size
-boundaries are documented in [APK format](apk-format.md).
+选择一致的领取者 ID 规则。ID 去除首尾空白并执行 Unicode NFC 规范化，仍区分大小写。同一规范化 ID 在不同密钥下共用用户记录，但每次登录只使用认证密钥的文件权限。成功验证提取码后才自动登记。
 
-Disable a key to stop new authentication and later download requests, including
-range retries. Block a user to stop that identity across keys. Bytes already sent
-cannot be recalled, and a transfer already authorized may finish. Historical
-encrypted key material remains available for trace verification. Re-enabling a key
-restores its codes and existing sessions until those sessions expire. Per-user code
-rotation, expiry and download-count limits are not implemented in this release.
+文件夹默认值仅为新上传预选密钥。文件权限始终明确，移动文件或修改默认值不会改变既有权限；空密钥选择表示仅管理员可见。同名上传创建不可变新版本，不替换旧对象。支持的布局与二进制大小限制见 [APK 格式](apk-format.md)。
 
-File deletion retires metadata and removes its R2 object. Issuance records, signed
-names and version identities remain for tracing. Download records mean issuance
-or transfer initiation, not confirmation that a browser saved the whole file.
-Keep the original APK and the applicable backup if you need to restore downloads.
+停用密钥可阻止新认证及后续下载（包括范围重试），封禁用户可阻止该身份使用所有密钥。已发送字节无法收回，已授权的传输可能完成。历史加密密钥材料保留用于验证；重新启用密钥恢复其提取码及尚未过期的现有会话。首版不支持逐用户提取码轮换、有效期或下载次数限制。
 
-## Administrator access
+删除文件会退役元数据并移除 R2 对象，保留签发记录、签发名称和版本身份用于溯源。下载记录表示签发或传输开始，不证明浏览器保存了完整文件。需要恢复下载时应保留原始 APK 和对应备份。
 
-Change the password through Settings while authenticated. Enter the current
-password, generate the new password key in the browser and sign in again afterward:
-all existing administrator sessions are invalidated. Administrator cookies expire
-after eight hours; recipient cookies after 24 hours. Logout clears the browser's
-cookie. Password changes, user blocking and key disabling provide the documented
-server-side invalidation controls; individual session revocation is not available.
+## 管理员访问
 
-Changing the management path immediately retires its former page and API paths.
-Save the returned path. If the path is lost, an operator with D1 access can recover
-it without resetting the installation:
+登录后在设置页修改密码。输入当前密码，在浏览器生成新密码密钥，随后重新登录；所有旧管理员会话失效。管理员 Cookie 有效期 8 小时，领取者 Cookie 24 小时，退出清除当前浏览器 Cookie。修改密码、封禁用户和停用密钥提供服务端失效控制，不支持逐会话撤销。
+
+修改管理路径会立即关闭旧页面与 API 路径，请保存返回的新路径。遗失路径时，具备 D1 权限的运维人员可查询，无需重置安装：
 
 ```sh
 pnpm exec wrangler d1 execute inkparcel --remote --command "SELECT admin_path FROM settings WHERE id = 1"
 ```
 
-The path is an additional access obstacle, not a password replacement. A forgotten
-administrator password has no email-based reset flow. Use a trusted recovery backup
-and an explicit recovery procedure; do not delete the settings row or reopen public
-setup to recover access. Routine password changes do not require editing SQL.
+管理路径只是额外访问门槛，不能代替密码。遗忘管理员密码没有邮件重置流程，应使用可信恢复备份与明确恢复程序，不要删除 settings 行或重开公开初始化入口。日常修改密码无需编辑 SQL。
 
-## Backup and restore
+## 备份与恢复
 
-A usable backup includes all of these:
+可用备份必须包含：
 
-- The D1 database, including distribution-key ciphertext, recipient mappings,
-  file/version metadata, issuance markers and migration state.
-- Every R2 original that must remain downloadable, preserving its object key.
-- The exact corresponding `APP_SECRET`, the deployed release and binding
-  configuration. Keep deployment secrets in an encrypted secret store separately
-  from the database export. Retain the bootstrap token only if setup is unfinished.
+- D1 数据库，包括分发密钥密文、领取者映射、文件/版本元数据、签发标记与迁移状态。
+- 所有需要继续下载的 R2 原文件，保留原对象键。
+- 精确对应的 `APP_SECRET`、部署版本和绑定配置。秘密应独立于数据库导出存放于加密秘密库；仅在初始化未完成时保留初始化令牌。
 
-Create a private backup directory outside the repository. For example, after setting
-`INKPARCEL_BACKUP_DIR` to that directory:
+在仓库外创建私有备份目录，将 `INKPARCEL_BACKUP_DIR` 设置为该目录后执行：
 
 ```sh
 pnpm exec wrangler d1 export inkparcel --remote --output "$INKPARCEL_BACKUP_DIR/database.sql"
 ```
 
-Use an authenticated R2/S3 backup tool or the Cloudflare dashboard to copy objects;
-no public bucket access is needed. An S3 credential used by that external backup tool
-is an operational credential, not a required application secret. Include object
-keys, sizes and checksums in the backup inventory. Keep the backup out of Git and
-verify it by restoring into a separate private instance.
+通过已认证的 R2/S3 备份工具或 Cloudflare 控制台复制对象，无需公开存储桶。外部备份工具的 S3 凭据属于运维凭据，并非应用必需秘密。备份清单应包含对象键、大小和校验和；不要放入 Git，应恢复到独立私有实例验证。
 
-For a consistent snapshot, arrange a maintenance window with no writes or active
-uploads. The application has no built-in maintenance switch. Stop or restrict
-traffic at the deployment layer and account for scheduled maintenance as well.
-Do not assume an independently timed D1 export and bucket copy form one atomic
-snapshot.
+一致性快照需要安排无写入、无活跃上传的维护窗口。应用没有内置维护开关，应在部署层停止/限制流量，也要考虑定时维护任务。不能假设不同时间的 D1 导出和存储桶复制天然构成原子快照。
 
-Restore to fresh private D1/R2 resources using the saved release and binding
-configuration. Import the database export, restore the original object keys, and
-set the saved `APP_SECRET` before accepting traffic. Apply only migrations newer
-than the restored schema. Validate administrative login, one original download,
-and a historical marker before switching the production route. An exported SQL
-snapshot can be imported into an empty destination database with:
+使用保存的版本与绑定配置恢复到全新私有 D1/R2。导入数据库、恢复原对象键并配置原 `APP_SECRET` 后才能接收流量。只应用比恢复模式更新的迁移，切换生产路由前验证管理员登录、一个原文件下载和历史标记。可将 SQL 快照导入空数据库：
 
 ```sh
 pnpm exec wrangler d1 execute inkparcel --remote --file "$INKPARCEL_BACKUP_DIR/database.sql"
 ```
 
-Point Wrangler at the destination database first. Do not import a snapshot on top
-of an active installation. D1 Time Travel can assist database recovery, but it does
-not back up R2 objects or Worker secrets.
+先将 Wrangler 指向目标数据库，不要覆盖活跃安装。D1 Time Travel 可辅助数据库恢复，但不备份 R2 对象或 Worker 秘密。
 
-Do not regenerate `APP_SECRET` during a reinstall or routine upgrade. Replacing it
-invalidates sessions/password verification and prevents decryption of existing
-distribution keys, breaking historical verification. Safe root-secret rotation
-requires a ciphertext/verifier migration and is not a built-in feature. Losing
-recipient mappings or issuance rows also removes required trace evidence; deleting
-an R2 original alone does not erase its already-persisted issuance mapping.
+重装或普通升级不得重生成 `APP_SECRET`。替换会使会话/密码验证失效、既有分发密钥无法解密，破坏历史验证。安全轮换根秘密需要迁移密文与验证值，目前未内置。丢失领取者映射或签发行同样会丢失必要溯源证据；单独删除 R2 原文件不会抹去已持久化的签发映射。
 
-## Retention and interrupted uploads
+## 保留期与中断上传
 
-Settings defaults IP retention to 30 days and accepts 0–3650 days. Setting it to zero
-clears stored IPs immediately and stops storing new ones. Other retention changes
-take effect at the next scheduled cleanup. Marker and issuance mappings are kept;
-IP cleanup does not delete provenance. Do not manually purge `downloads` as if it
-were a disposable web access log.
+IP 默认保留 30 天，可设置 0–3650 天。设为 0 会立即清除已有 IP 并停止保存新 IP；其他保留期变更在下次定时清理生效。标记与签发映射保留，清理 IP 不删除溯源。不要把 `downloads` 当作可随意清空的访问日志。
 
-The configured daily cron is `17 3 * * *`, at 03:17 UTC. It removes expired IPs,
-old rate-limit buckets and expired part locks, then processes a bounded number of
-uploads idle for at least 24 hours and retries pending object deletion. A backlog
-may take multiple runs; monitor it rather than assuming all stale objects disappear
-at the first deadline. Transient R2 cleanup failures remain retryable.
+默认 cron 为 `17 3 * * *`，即每天 UTC 03:17。任务清理过期 IP、旧速率限制桶及过期分片锁，再有界处理闲置至少 24 小时的上传，并重试待删除对象。积压可能需要多轮，不能假设截止时间一到全部清除；R2 短暂清理失败可重试。
 
-Pending multipart uploads can be resumed or aborted by an authenticated
-administrator after signing in again. Retry failed parts; completed parts retain
-their ETags. A failed completion request should be retried before sending the whole
-file again, since R2 may already have completed it. A structurally invalid APK must
-be aborted and replaced with a supported original. Uploads idle beyond the cleanup
-window may be removed. Keep R2 multipart lifecycle policy consistent with the
-intended resume window, and inspect orphaned multipart state after interrupted
-database creation/restoration.
+管理员重新登录后可恢复或中止待完成分片上传。失败分片可重试，完成分片保留 ETag。完成请求失败应先重试完成，避免重新上传全部文件，因为 R2 可能已完成合并。结构无效 APK 必须中止并替换为受支持原文件。超过清理窗口的上传可能被删除；R2 分片生命周期策略应与恢复窗口一致，在数据库创建/恢复中断后检查孤立分片状态。
 
-## Upgrades and diagnostics
+## 升级与诊断
 
-Read release notes and make a tested backup before upgrading. Install the lockfile,
-run local checks, apply the release's remote migrations and deploy the matching
-Worker/assets together. Migration rollback is not automatic; restore a consistent
-backup or use a release-specific recovery plan if schema rollback is required.
+升级前阅读发行说明并验证备份。按锁文件安装依赖，运行本地检查，执行版本要求的线上迁移，再一起部署匹配的 Worker 与静态资源。迁移不会自动回滚；需要回退模式时，恢复一致备份或使用版本专用恢复方案。
 
-Monitor Worker CPU/errors and D1/R2 usage in Cloudflare. Review the current
-[deployment allowances](deployment.md#free-tier-boundaries) before changing plans.
-Avoid logging passwords, derived password keys, codes, marker payloads or real
-recipient identifiers in issue reports. The default deployment disables request
-observability, and application failures log an error class rather than body data.
-Reproduce problems using generic fixtures where possible. Preserve the release,
-request outcome and nonsecret resource state needed to distinguish an unsupported
-APK, an authorization rejection and an infrastructure failure.
+在 Cloudflare 监控 Worker CPU/错误和 D1/R2 用量，变更套餐前核对[部署额度](deployment.md#免费额度边界)。问题报告不得记录密码、派生密码密钥、提取码、标记载荷或真实领取者标识。默认部署关闭请求可观测性，应用失败日志只记录错误类别，不记录请求体。尽量使用通用样本复现，保留版本、请求结果和非秘密资源状态，以区分不支持 APK、权限拒绝与基础设施故障。

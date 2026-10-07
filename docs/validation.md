@@ -1,63 +1,38 @@
-# Validation status
+# 验证状态
 
-This page records v0.1 local acceptance on 2026-10-07 and the separate deployment
-boundaries. It does not claim production deployment or Cloudflare Free CPU acceptance.
+简体中文 | [English](en/validation.md)
 
-## Local acceptance
+本文记录 2026-10-07 的 v0.1 本地与线上功能验收；这些结果不等于 Cloudflare Free 的 CPU 验收。
 
-- `pnpm check` passes formatting, relative documentation links/anchors, all TypeScript
-  checks, 55 package tests and the Vite/Worker production build with deployment dry run.
-  The package split is 29 binary, 13 Worker integration and 13 browser-logic tests.
-- Worker integration uses actual local Workerd with D1 migrations and R2 bindings:
-  protected/concurrent setup, old-path 404, HTTPS/Origin enforcement, password/session
-  invalidation, cross-key isolation, user controls, folders, 100-key bulk ACL updates,
-  multipart retries/abort/recovery, format capacity/version checks, range semantics,
-  historical trace, Unicode validation, multiline notes and retention cleanup.
-- `pnpm fixtures` generates independent generic APKs and disposable signing keys.
-- `pnpm test:apk` preserves Android `apksigner` verification and signing certificates
-  for v2, v1+v2, v2+v3, verity, v3.1 rotation and a 34 MiB stored-payload fixture.
-  Extraction, normalized fingerprints and beginning/cross-block/end ranges pass for
-  each. v1-only inputs are rejected. Local SDK build-tools: 37.0.0.
-- `pnpm test:e2e` passes the Chromium workflow through the real local Worker: browser
-  initialization, key creation/code issue, 34 MiB multipart upload with two visible
-  keys, display-name edits without an extension, personalized download and signature
-  verification, local trace, actual suffix-byte comparison, notes/record filtering,
-  cross-key denial, disabled-key denial with historical verification, and resumed
-  missing parts after clearing browser storage. The recovery loading gate, admin
-  path migration, old-password rejection and new-password login are exercised too.
-- Trace network requests contain only the marker and fingerprint (under 8 KiB),
-  while the selected file is about 34 MiB. No file body is uploaded for tracing.
-- Desktop and 390 px mobile pages were visually inspected. A mobile table overflow
-  was fixed and checked separately: page width remains 390 px while the table can
-  scroll internally. The E2E guard checks page width and disables screenshot animation.
-- `pnpm setup:local` and `pnpm db:migrate` create fresh private local configuration
-  and apply the initial schema. Production dependency audit reports no known advisories.
-- Large-offset coverage uses sparse synthetic sources above 2 GiB; this is parser
-  coverage, not evidence of a completed multi-gigabyte network transfer.
+## 本地验收
 
-Local build tools run inside the `dev` Distrobox container. Signature fixtures and
-test signing keys are generated under ignored `target/`; the generation and checking
-scripts are committed, so the evidence can be reproduced without private inputs.
+- `pnpm check` 通过格式、文档相对链接/锚点、全部 TypeScript 检查、55 项包测试，以及 Vite/Worker 生产构建和部署预演。测试分为 29 项二进制、13 项 Worker 集成、13 项浏览器逻辑。
+- Worker 集成使用真实本地 Workerd、D1 迁移和 R2 绑定，覆盖受保护/并发初始化、旧路径 404、HTTPS/Origin 强制、密码/会话失效、跨密钥隔离、用户控制、文件夹、100 密钥批量 ACL、分片重试/中止/恢复、格式容量/版本检查、范围语义、历史溯源、Unicode 校验、多行备注与保留期清理。
+- `pnpm fixtures` 生成独立通用 APK 和一次性签名密钥。
+- `pnpm test:apk` 验证 v2、v1+v2、v2+v3、verity、v3.1 轮换和 34 MiB 非压缩载荷样本，保留 Android apksigner 验证结果及证书。每种样本的提取、规范化指纹、起始/跨块/尾部范围均通过；拒绝仅 v1 输入。本地 SDK build-tools 为 37.0.0。
+- `pnpm test:e2e` 通过 Chromium 测试真实本地 Worker：浏览器初始化、创建密钥/发码、两个可见密钥的 34 MiB 分片上传、省略扩展名的显示名称编辑、个性化下载及签名验证、本地溯源、真实后缀字节比较、备注/记录筛选、跨密钥拒绝、停用密钥拒绝与历史验证，以及清空浏览器存储后恢复缺失分片。另覆盖恢复加载门槛、管理路径迁移、旧密码拒绝和新密码登录。
+- 溯源网络请求只有标记与指纹（小于 8 KiB），所选文件约 34 MiB，不上传文件体。
+- 目视检查桌面与 390 px 手机页面。修复手机表格溢出并单独检查，页面宽度保持 390 px，表格内部可滚动。E2E 检查页面宽度并关闭截图动画。
+- `pnpm setup:local` 与 `pnpm db:migrate` 可创建新私有本地配置并应用初始模式；生产依赖审计未报告已知漏洞。
+- 大偏移覆盖使用大于 2 GiB 的稀疏合成源，仅证明解析器覆盖，不证明完成多 GB 网络传输。
 
-## Continuous integration
+本地构建工具在 `dev` Distrobox 容器运行，签名样本和测试密钥生成于被忽略的 `target/`。生成与验证脚本已提交，无需私有输入即可复现。
 
-The committed [Checks workflow](../.github/workflows/checks.yml) runs the local
-checks, generated Android signature matrix and Chromium workflow on Ubuntu/Node 24.
-[Run 37622194426](https://github.com/ccc007ccc/inkparcel/actions/runs/37622194426)
-passed for code commit `6bb3fa6`: all 55 package tests, production build/dry run,
-six signed APK combinations plus the v1-only rejection, and the complete Chromium
-workflow. The release's subsequent documentation-only update does not alter that
-verified executable tree.
+## 持续集成
 
-## Remote acceptance
+已提交的 [Checks 工作流](../.github/workflows/checks.yml) 在 Ubuntu/Node 24 上执行本地检查、生成 Android 签名矩阵与 Chromium 工作流。[运行 37622194426](https://github.com/ccc007ccc/inkparcel/actions/runs/37622194426) 对代码提交 `6bb3fa6` 通过：55 项包测试、生产构建/预演、六种签名 APK 组合及仅 v1 拒绝、完整 Chromium 工作流。这是该提交的历史 CI 证据，后续可执行代码变更需要单独检查受影响范围。
 
-Cloudflare account deployment, real R2 transfer behavior, and Workers Free 10 ms
-CPU compliance require measurement against a configured deployment and target APK
-sizes. Local Workerd, signature verification and synthetic offsets cannot prove
-these properties. R2 subscriptions and over-quota charges remain operator-managed.
+## 线上验收
 
-No physical Android installation/runtime acceptance, pure v3 APK support, reused v4
-`.idsig`, anti-removal watermarking or externally modified app compatibility is
-claimed. An application that verifies its complete APK bytes may reject a marked
-copy even when Android signature verification succeeds. Validate representative
-originals for the deployment before distributing them.
+2026-10-07 在已配置的 Cloudflare Worker、D1 和私有 R2 上完成通用样本验证，未使用私有项目文件：
+
+- 自定义域名 HTTPS、管理员初始化与登录通过；初始化后 `/admin` 和 `/api/setup` 返回 404，远端初始化秘密已删除。R2 公共入口关闭。
+- 约 34 MiB 通用签名 APK 完成三段上传、领取者登录、完整下载、签名验证与规范化指纹匹配。
+- 首轮实测发现普通 ReadableStream 的范围响应未保留 Content-Length。提交 `1afc809` 改用 FixedLengthStream，保留流式传输；修复后 Worker 类型检查和全部 13 项集成测试通过。
+- 修复后线上 GET/HEAD 均报告 35,659,995 字节，完整 GET 实收相同长度；后缀范围返回 206、Content-Length 64，并与完整文件最后 64 字节相等。同一签发重试保持内容一致。
+- 浏览器本地溯源只发送标记与指纹，小于 8 KiB。停用密钥后范围请求返回 401，历史标记仍能验证。
+- 验证后移除测试 R2 文件和空文件夹，停用测试密钥并封禁测试身份，保留签发元数据。
+
+上述结果仅覆盖功能和该样本的真实传输。实际账户套餐及 Workers Free 的 10 ms CPU 合规尚未确认，需要针对具体部署及目标 APK 大小测量；本地 Workerd、签名验证和合成偏移也不能证明这些属性。R2 订阅与超额费用仍由部署者管理。
+
+不宣称真机 Android 安装/运行验收、纯 v3 APK 支持、复用 v4 `.idsig`、防移除水印或外部修改应用兼容性。即使 Android 签名验证成功，自行校验整个 APK 字节的应用仍可能拒绝带标记副本；正式分发前应验证有代表性的原文件。

@@ -1,30 +1,30 @@
-name: Bug report
-description: Report a reproducible functional problem using nonprivate examples.
+name: 问题反馈 / Bug report
+description: 使用非私有示例反馈可复现的问题 / Report a reproducible problem using nonprivate examples.
 body:
   - type: markdown
     attributes:
-      value: Please use SECURITY.md for vulnerabilities. Do not post secrets, recipient information or private APKs.
+      value: 安全漏洞请按 SECURITY.md 私下报告，不要发布密钥、领取者信息或私有 APK。 / Use SECURITY.md for vulnerabilities; never post secrets, recipient data or private APKs.
   - type: input
     id: version
     attributes:
-      label: InkParcel version or commit
+      label: InkParcel 版本或提交 / Version or commit
     validations:
       required: true
   - type: textarea
     id: reproduce
     attributes:
-      label: Steps to reproduce
-      description: Include browser/runtime information and a generic example when possible.
+      label: 复现步骤 / Steps to reproduce
+      description: 请附浏览器、运行环境与通用示例。 / Include browser/runtime information and a generic example.
     validations:
       required: true
   - type: textarea
     id: behavior
     attributes:
-      label: Expected and actual behavior
+      label: 预期与实际表现 / Expected and actual behavior
     validations:
       required: true
   - type: textarea
     id: evidence
     attributes:
-      label: Nonsecret error details
-      description: Redact tokens, user identifiers, marker payloads and private file names.
+      label: 脱敏后的错误信息 / Nonsecret error details
+      description: 请隐藏令牌、用户标识、标记内容和私有文件名。 / Redact tokens, user identifiers, marker payloads and private file names.

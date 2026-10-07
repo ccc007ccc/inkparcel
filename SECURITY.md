@@ -1,36 +1,22 @@
-# Security policy
+# 安全政策
 
-The current 0.1 release line is the initial support target. Deployments should use
-the latest patched release and retain backups of storage, database and secrets.
+简体中文 | [English](docs/en/SECURITY.md)
 
-## Reporting
+当前支持初始的 0.1 版本系列。部署时应使用最新修补版本，并保留文件存储、数据库和密钥的备份。
 
-Use the repository's **Security → Report a vulnerability** private reporting form
-when it is enabled. If that form is unavailable, contact the maintainer through
-their GitHub profile and request a private reporting channel. Do not include
-secrets, private files or exploit details in public issues.
+## 报告漏洞
 
-## Security boundaries
+如果仓库已启用私密漏洞报告，请使用 **Security → Report a vulnerability**。如果该入口不可用，请通过维护者的 GitHub 个人资料联系并请求私密报告渠道。不要在公开 Issue 中包含密钥、私有文件或漏洞利用细节。
 
-- Recipient markers identify issuance records, not culpability. They can be removed
-  or copied; InkParcel is not DRM or an anti-removal watermarking system.
-- APK signature preservation is distinct from marker authentication. Only tested
-  signing layouts are supported. APK v4 `.idsig` files cannot be reused after edits.
-- The browser parses trace files locally. Fingerprints are computed on the operator's
-  device. The server cannot independently inspect a file that was never uploaded.
-- An administrator and their browser are trusted to upload files and fingerprints.
-  An administrator, compromised application secret or compromised browser can defeat
-  attribution. Do not treat this service as independent forensic evidence.
-- A recipient's ID and access code may be shared. Block the user or disable the
-  distribution key to revoke access; deterministic individual code rotation is not
-  part of v0.1.
-- The admin path reduces casual discovery but is not an authentication mechanism.
-  Keep a strong password and protect the one-time bootstrap token.
-- The browser's password-derived key is password-equivalent. It must only be sent
-  over HTTPS. The Worker uses a secret pepper to verify it; exposing both the D1
-  backup and APP_SECRET removes that additional protection.
-- Public R2 access must remain disabled. Recipient downloads must pass through the
-  Worker so authorization and personalized marking cannot be bypassed.
+## 安全边界
 
-Never share `.dev.vars`, deployment tokens, D1 exports or unredacted recipient logs
-when reporting a bug. See the deployment guide for backup and secret handling.
+- 领取标记对应签发记录，不能据此判定责任。标记可以被移除或复制；InkParcel 不是 DRM，也不是防移除水印系统。
+- 保留 APK 签名和验证标记真实性是两件事。仅支持经过测试的签名布局；修改后不能复用 APK v4 的 `.idsig` 文件。
+- 溯源文件由浏览器本地解析，指纹也在操作者设备上计算。服务端无法独立检查从未上传的文件。
+- 系统信任管理员及其浏览器上传的文件和指纹。管理员、泄露的应用密钥或被入侵的浏览器均可能破坏归属判断，不应把本服务当作独立司法鉴定证据。
+- 领取者可以分享用户 ID 和提取码。封禁用户或停用分发密钥可以撤销访问；v0.1 不支持单独轮换某个用户的确定性提取码。
+- 隐藏管理路径仅减少偶然发现，不能代替身份认证。请使用强密码并保护一次性初始化令牌。
+- 浏览器从密码派生的密钥等价于密码，只能通过 HTTPS 传输。Worker 使用服务端秘密值（pepper）验证它；D1 备份与 `APP_SECRET` 同时泄露会失去这层额外保护。
+- R2 必须保持关闭公共访问。领取者的下载必须经过 Worker，避免绕过权限校验和个性化标记。
+
+报告问题时，切勿分享 `.dev.vars`、部署令牌、D1 导出或未脱敏的领取记录。备份与密钥处理请参阅[运维指南](docs/operations.md)。

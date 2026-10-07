@@ -1,20 +1,15 @@
-# InkParcel contributor instructions
+# InkParcel 贡献者与代理工作约定
 
-InkParcel is a general-purpose self-hosted file distribution service. Keep examples,
-fixtures, documentation, and commit messages independent of private deployments.
+简体中文 | [English](docs/en/AGENTS.md)
 
-- Read `docs/SPEC.md` for behavior and `docs/API.md` for shared API contracts.
-- On this workstation, builds, dependency installs, generators and tests run in
-  `distrobox enter dev -- ...`; never install tools on the immutable host.
-- Use TypeScript, explicit runtime validation, and small modules. Preserve unknown
-  APK signing-block entries. Never buffer an entire artifact in the Worker.
-- File authorization is explicit and belongs to the authenticated key. Check it
-  again on download. Private R2 originals must never be publicly downloadable.
-- Never commit credentials, real recipient data, uploaded artifacts, or private
-  signing material. Test signing keys must be generated in ignored temporary paths.
-- Add meaningful tests for authorization, binary parsing, cryptography and streaming
-  changes. Run the affected checks after a coherent batch, then stop if they pass.
-- Keep SPEC and API documents current when behavior changes. Put usage in guides,
-  implementation contracts in SPEC/API, and evidence in `docs/validation.md`.
-- Make coherent Git commits as work becomes verified. Do not publish or deploy
-  unreviewed secrets or imply remote validation from local tests.
+InkParcel 是通用的自托管文件分发服务。示例、测试样本、文档和提交说明不得关联私有部署。
+
+- 行为以 `docs/SPEC.md` 为准，共享 API 契约见 `docs/API.md`。
+- 本工作站的构建、依赖安装、生成器和测试使用 `distrobox enter dev -- ...`；不要在不可变宿主机安装工具。
+- 使用 TypeScript、明确的运行时校验和小模块。保留未知的 APK 签名块条目，禁止在 Worker 中缓冲整个文件。
+- 文件权限必须明确绑定当前认证密钥，下载时再次校验。R2 私有原文件不得公开下载。
+- 禁止提交凭据、真实领取者信息、上传文件或私有签名材料。测试签名密钥只能生成在被忽略的临时路径中。
+- 权限、二进制解析、密码学与流式处理修改应有有效测试。完成一个连贯批次后运行相关检查，通过后停止重复测试。
+- 行为变化须同步 SPEC/API；使用方法放指南，实现契约放 SPEC/API，验证证据放 `docs/validation.md`。
+- 经验证的变更应形成连贯的 Git 提交。不得公开或部署未经检查的秘密信息，也不得将本地测试表述为线上验证。
+- 默认文档使用简体中文，英文版本位于 `docs/en/`；修改文档时同步两种语言并维护互链。

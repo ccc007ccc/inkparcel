@@ -1,173 +1,86 @@
-# InkParcel specification
+# InkParcel 产品规格
 
-This is the authoritative v0.1 specification for a generic Cloudflare-hosted file
-distribution service; implementation and acceptance status live in `validation.md`.
+简体中文 | [English](en/SPEC.md)
 
-## Product and scope
+本文是通用 Cloudflare 文件分发服务 v0.1 的权威规格；实现与验收状态见[验证记录](validation.md)。
 
-An administrator distributes personal access codes, uploads APKs into folders and
-selects which keys may access each file. Recipients authenticate with their chosen
-user ID and code, browse their authorized files, and receive an APK with a signed
-recipient marker. Administrators extract markers locally in the browser and verify
-their issuance records without uploading the selected file.
+## 产品与范围
 
-The initial release includes setup, password login, configurable admin path, key
-generation/import/disable, code generation, user blocking and notes, folders, APK
-multipart upload, explicit multi-key file visibility, file management, resumable
-personalized downloads, searchable issuance records, local trace verification,
-deployment instructions, backup guidance, automated checks and generic APK fixtures.
+管理员发放专属提取码，将 APK 上传到文件夹，并选择每个文件允许使用的密钥。领取者使用自定用户 ID 与提取码登录，浏览获授权文件，下载带有签名领取标记的 APK。管理员在浏览器本地提取标记并验证签发记录，所选文件本身不会上传。
 
-Additional formats, runtime folder ACL inheritance, per-user code rotation, paid
-billing features, multiple administrators and anti-removal watermarking are out of
-scope. Interfaces must permit adding handlers without changing issuance logic.
+首版包含初始化、密码登录、自定义管理路径、密钥生成/导入/停用、提取码生成、用户封禁与备注、文件夹、APK 分片上传、明确的多密钥可见性、文件管理、个性化断点续传、可搜索的签发记录、本地溯源、部署说明、备份指南、自动检查和通用 APK 测试样本。
 
-## Platform and architecture
+其他文件格式、运行时文件夹 ACL 继承、逐用户提取码轮换、付费计费功能、多管理员和防移除水印不在首版范围内。接口必须允许在不改变签发逻辑的前提下添加处理器。
 
-- React + TypeScript + Vite frontend; Hono Worker API; private R2 storage and D1.
-- One deployment, same-origin APIs and cookies, static assets through the Worker
-  routing policy. Unknown pages and retired admin paths return an actual HTTP 404.
-- No entire APK buffers or whole-file hashing in Worker download requests. Sources
-  support bounded random reads and streamed ranges. Browser hashing is incremental.
-- Standard multipart uploads use 16 MiB parts (last may be smaller), streamed through
-  authenticated Worker endpoints to R2. This avoids mandatory S3 API credentials and
-  Cloudflare's 100 MB inbound request ceiling. Failed parts can be retried.
-- Free-tier compatibility is a target to measure, not an unlimited-free promise.
-  Remote CPU, account quotas and billing depend on the deployment. Never infer
-  Workers Free 10 ms CPU acceptance from local runtime tests.
+## 平台与架构
 
-## Identities, secrets and authentication
+- 前端使用 React + TypeScript + Vite，API 使用 Hono Worker，存储使用私有 R2 和 D1。
+- 单个部署使用同源 API 与 Cookie，静态资源也经过 Worker 路由策略；未知页面和退役的管理路径返回真实 HTTP 404。
+- Worker 下载请求不得缓冲整个 APK 或计算全文件哈希。数据源支持有界随机读取和范围流，浏览器增量计算哈希。
+- 标准分片大小为 16 MiB（最后一片可更小），经过管理员认证的 Worker 接口流式传入 R2，无需强制配置 S3 API 凭据，也不会触及 Cloudflare 单次入站请求 100 MB 上限。失败分片可以重试。
+- 兼容免费额度是需要测量的目标，不是无限免费的承诺。线上 CPU、账户额度和计费取决于部署；不得用本地运行时测试证明 Workers Free 的 10 ms CPU 验收通过。
 
-- Normalize user IDs with trim + Unicode NFC, preserve case; limit to 128 characters
-  and reject control characters. Use the identical function for issuing and login.
-- Public UUIDs identify users; markers never contain raw external user IDs.
-- Each key has immutable UUID/short code, editable display name, 256-bit secret,
-  enabled state and creation time. Duplicate secret imports are rejected. Secrets
-  are encrypted in D1 using purpose-separated material from `APP_SECRET`.
-  The initial operational limits are 100 keys and 1000 folders; bulk ACL writes
-  remain inside the D1 Free request query limit at those bounds.
-- HMAC-SHA-256 codes have a public key ID prefix and at least 128 authentication bits.
-  Code and marker subkeys are domain separated; comparison is constant-time.
-- A recipient session binds one user and one successfully validated key. First
-  successful validation creates the user; future keys reuse the user identity.
-- Every list, issuance and download checks user status, key status, file status and
-  explicit file-key ACL. Historical keys do not expand the active session's ACL.
-- Disabled keys cannot authenticate or download, but still verify old markers.
-  Individual users can be blocked. Stateless codes do not support per-user rotation.
-- Admin setup requires `BOOTSTRAP_TOKEN` from deployment secrets. At `/admin`, a
-  wizard collects a password and new nonreserved admin path, then atomically closes
-  setup. Concurrent setup attempts cannot overwrite a completed installation.
-- Password work factor must not be reduced to meet Worker CPU limits. The browser
-  derives a 256-bit password key with PBKDF2-SHA-256, 600,000 iterations and a random
-  per-password salt; the Worker stores a purpose-separated keyed verifier using
-  `APP_SECRET`. The derived key is password-equivalent and only travels in a TLS
-  POST body, never URLs or logs. The database alone cannot verify password guesses.
-- Admin and recipient cookies are separate, HttpOnly, Secure in production and
-  SameSite=Strict. Mutations enforce Origin/CSRF protection. Authentication is rate
-  limited; password changes invalidate old admin sessions. Local HTTP development
-  may omit Secure cookies only when explicitly configured as local.
-- Backups must cover D1, R2 and deployment secrets. Losing marker secrets or recipient
-  mappings makes historical trace verification impossible.
+## 身份、密钥与认证
 
-## Files, folders and uploads
+- 用户 ID 执行 trim 和 Unicode NFC 规范化，保留大小写，最多 128 个字符，拒绝控制字符。发码和登录必须使用同一函数。
+- 用户使用公开 UUID 标识，标记不包含原始外部用户 ID。
+- 每个密钥包含不可变 UUID/短编号、可编辑名称、256 位秘密值、启用状态和创建时间。拒绝重复导入相同秘密值；使用由 `APP_SECRET` 按用途分离派生的材料加密后存入 D1。初始上限为 100 个密钥、1000 个文件夹，在这些边界内批量 ACL 写入不得超过 D1 Free 单次请求查询限制。
+- 提取码使用 HMAC-SHA-256，包含公开密钥 ID 前缀和至少 128 位认证强度。提取码与标记的子密钥按用途分离，比较采用常量时间实现。
+- 领取会话绑定一个用户与一个成功验证的密钥。首次通过验证自动创建用户，后续使用其他密钥时复用同一身份。
+- 每次列表、签发与下载均检查用户状态、密钥状态、文件状态和明确的文件—密钥 ACL。历史使用过的密钥不会扩大当前会话权限。
+- 停用密钥后不能再认证或下载，但仍可验证历史标记。可单独封禁用户；无状态提取码不支持逐用户轮换。
+- 管理初始化需要部署秘密中的 `BOOTSTRAP_TOKEN`。在 `/admin` 向导中设置密码和非保留管理路径，随后原子关闭初始化；并发初始化不能覆盖已完成的安装。
+- 不得为了满足 Worker CPU 限制降低密码计算强度。浏览器使用 PBKDF2-SHA-256、600,000 次迭代和每个密码独立随机盐，派生 256 位密码密钥；Worker 使用 `APP_SECRET` 保存按用途分离的带密钥验证值。派生值等价于密码，只能放在 TLS POST 请求体中，不得进入 URL 或日志。仅持有数据库无法验证密码猜测。
+- 管理员和领取者使用独立 Cookie，包含 HttpOnly、生产环境 Secure 和 SameSite=Strict。写操作强制 Origin/CSRF 防护；认证有速率限制，修改密码使旧管理员会话失效。只有明确配置为本地环境时，HTTP 开发才允许省略 Secure。
+- 备份必须覆盖 D1、R2 和部署秘密。丢失标记密钥或用户映射后，历史溯源将无法验证。
 
-- Folders form an acyclic parent tree. They organize files, not runtime permission
-  inheritance. Renaming/moving folders or files never changes file ACLs.
-- Each file row is an immutable uploaded version with random object key, original
-  name snapshot, display name, folder, size, normalized content fingerprint,
-  handler version, upload time and pending/ready/deleted state. Re-uploading a name
-  creates a new version; historical objects/identities are never overwritten.
-- Display names may omit an extension. Issuance appends the registered format's
-  primary extension when needed and snapshots this effective download filename in
-  both the marker and record, so the result remains installable and locally traceable.
-- `file_keys` is explicit many-to-many authorization. Empty selection means admin
-  only. Folder defaults may be copied at upload, never applied retroactively.
-- Recipient folders are only the ancestors of accessible files; hidden filenames
-  and empty unauthorized folders must not be exposed.
-- Upload sessions bind authenticated administrators, object keys, expected sizes and
-  part indexes. Finalization validates actual object length and APK structure before
-  marking ready, including capacity for any permitted marker. Browser supplies the normalized fingerprint; the trust boundary is
-  the authenticated uploader, and local tracing recomputes it independently.
-- Incomplete uploads can be resumed/aborted; cleanup handles stale multipart state.
-  File deletion is logical for provenance and removes the object when requested.
-  Key deletion cannot destroy historical verification material.
+## 文件、文件夹与上传
 
-## Marker and APK contracts
+- 文件夹组成无环父子树，只负责组织，不提供运行时权限继承。重命名或移动文件/文件夹不改变文件 ACL。
+- 每个文件行表示不可变的上传版本，保存随机对象键、原始名称快照、显示名称、文件夹、大小、规范化内容指纹、处理器版本、上传时间与 pending/ready/deleted 状态。同名再上传会创建新版本，不覆盖历史对象或身份。
+- 显示名称可省略扩展名。签发时按格式注册表补齐主扩展名，将最终下载名称同时保存到标记和记录，保证可安装与本地识别。
+- `file_keys` 提供明确的多对多授权。空选择表示仅管理员可见；上传时可复制文件夹默认密钥，但不能追溯修改既有文件权限。
+- 领取者只看到可访问文件的祖先文件夹，不得泄露隐藏文件名或无权访问的空文件夹。
+- 上传会话绑定已认证管理员、对象键、预期大小和分片索引。完成时检查对象实际长度与 APK 结构，并验证所有允许大小的标记均有写入空间，随后才能变为 ready。浏览器提供规范化指纹，信任边界是已认证上传者；本地溯源会独立重算指纹。
+- 未完成上传可以恢复或中止，清理任务处理过期分片状态。删除文件时保留溯源元数据，并按请求移除对象；不得因删除密钥而破坏历史验证材料。
 
-The byte-level format and fingerprint algorithm are defined in [APK format](apk-format.md).
+## 标记与 APK 契约
 
-- A versioned authenticated envelope binds key ID, opaque recipient ID, immutable
-  file ID, normalized fingerprint, issued-name snapshot and unique issuance ID.
-  Authenticate exact serialized bytes, bound sizes, and reject unsupported versions.
-- A handler exposes `mark(source, marker)` and `extract(source)`. The source offers
-  size, bounded reads and streams. Mark returns the output size and a range-capable
-  stream factory so byte ranges refer to the personalized representation.
-- The format registry also supplies media type, extensions, immutable format version,
-  local fingerprinting and bounded preflight. Upload/download/trace workflows select
-  these capabilities from the registry. Stored version mismatches fail explicitly;
-  an upgrade must not silently change an existing issuance's bytes or fingerprint.
-- Extension chooses a handler candidate; structural validation confirms the format.
-  Unsupported formats and unsupported signing layouts fail explicitly.
-- APK support preserves existing v2/v3-family signatures using a dedicated custom
-  APK Signing Block ID. Preserve unknown entries and verity alignment/padding;
-  reject ZIP64, malformed lengths, duplicate own markers and unsafe offsets.
-- Initial uploads containing InkParcel markers are rejected. Marked output must
-  preserve signing certificates and pass Android apksigner verification for the
-  supported fixture matrix. v1-only inputs and existing v4 .idsig reuse are excluded.
-- Browser fingerprinting uses the documented canonical APK representation independent
-  of the mutable marker and padding. It distinguishes payload changes and binds
-  signing identity. Both marked and source files have the same normalized fingerprint.
-- A valid marker proves issuance, not culpability or tamper resistance. Marker
-  removal/copying is possible. Trace results separately show envelope authenticity,
-  file fingerprint match and issuance/user/version metadata. Never silently treat
-  an authenticated marker alone as proof of whole-file identity.
+字节格式和指纹算法定义见 [APK 格式](apk-format.md)。
 
-## Downloads and records
+- 带版本的认证封装绑定密钥 ID、不透明领取者 ID、不可变文件 ID、规范化指纹、签发名称快照和唯一签发 ID。认证精确序列化字节，限制大小，拒绝不支持的版本。
+- 处理器提供 `mark(source, marker)` 与 `extract(source)`。数据源提供大小、有界读取和流；mark 返回输出大小及支持范围的流工厂，范围以个性化文件为准。
+- 格式注册表还提供媒体类型、扩展名、不可变格式版本、本地指纹和有界预检。上传、下载、溯源均从注册表选择能力。存储版本不匹配时明确失败；升级不得悄悄改变既有签发的字节或指纹。
+- 扩展名选择候选处理器，结构校验确认格式；不支持的格式或签名布局必须明确拒绝。
+- APK 通过独立的自定义签名块 ID 保留现有 v2/v3 系列签名，同时保留未知条目与 verity 对齐/填充；拒绝 ZIP64、错误长度、重复自有标记和不安全偏移。
+- 拒绝已包含 InkParcel 标记的初始上传。输出必须保留签名证书，并通过受支持样本矩阵的 Android apksigner 验证；不支持仅 v1 签名输入或复用旧 v4 `.idsig`。
+- 浏览器指纹基于文档定义的规范化 APK，与可变标记及填充无关，区分载荷变化并绑定签名身份。原文件与带标记文件具有相同规范化指纹。
+- 有效标记证明签发记录，不能证明责任归属或抗篡改能力。标记可能被移除或复制；溯源结果分别展示封装真实性、文件指纹匹配和签发/用户/版本元数据，不得将单独通过认证的标记当作整个文件身份的证明。
 
-- Create and persist an issuance and its exact marker before sending personalized
-  bytes. Each issuance has stable output bytes, length and ETag across retries.
-- Single byte ranges, suffix ranges, HEAD, If-Range and 416 behavior must be correct.
-  Multi-range may be explicitly rejected. Resumed requests are one issuance.
-- R2 originals stay private. No presigned original GETs. Personalized responses use
-  private/no-store caching; access revocation is checked on resumed requests too.
-- Records represent issuance/transfer initiation, not proof of local file save.
-  The UI states this limitation. Record per-request transfer attempts only if useful;
-  never inflate issuance counts for ranges or HEAD probes.
-- Provenance mappings remain after file/key retirement. IP retention is separately
-  configurable and can be cleared without destroying issuance metadata.
+## 下载与记录
 
-## User interface
+- 发送个性化字节前必须创建并保存签发及其精确标记。同一次签发在重试时具有稳定的输出字节、长度和 ETag。
+- 正确实现单范围、后缀范围、HEAD、If-Range 与 416；可明确拒绝多范围。断点续传仍属于同一次签发。
+- R2 原文件保持私有，不提供原文件预签名 GET。个性化响应使用 private/no-store 缓存策略，续传也重新检查撤销状态。
+- 记录表示签发或传输开始，不证明已保存到本地，界面必须说明。仅在有用时记录逐请求传输尝试；不得因范围请求或 HEAD 探测增加签发次数。
+- 文件或密钥退役后保留溯源映射。IP 保留期可单独配置，清除 IP 不破坏签发元数据。
 
-- Responsive Chinese-first UI with consistent English project terminology. Public
-  page: user ID/code login, folder breadcrumbs, authorized files, sizes and downloads.
-- Admin: setup/login, file library (folders, uploads, multi-key ACL, rename/delete),
-  keys/codes, users/notes/blocking, filtered issuance records, local trace, settings.
-- Upload progress/retry/abort, meaningful empty/error/loading states, keyboard labels,
-  confirm destructive actions and no plaintext secret exposure in tables.
-- Trace file stays in the browser; show local processing progress and distinguish
-  no marker, malformed marker, invalid authentication and mismatched content.
+## 用户界面
 
-## Acceptance gates
+- 响应式界面默认中文，项目英文术语保持一致。公开页提供用户 ID/提取码登录、文件夹面包屑、授权文件、大小与下载。
+- 后台包含初始化/登录、文件库（文件夹、上传、多密钥 ACL、重命名/删除）、密钥/提取码、用户/备注/封禁、记录筛选、本地溯源和设置。
+- 提供上传进度/重试/中止、明确的空状态/错误/加载状态、键盘可访问标签、破坏性操作确认；表格不显示明文秘密值。
+- 溯源文件留在浏览器，显示本地处理进度，并区分无标记、标记格式错误、认证失败和内容不匹配。
 
-1. Fresh setup, race protection, retired-path 404, login/logout and password/session
-   invalidation work in the actual Worker runtime with D1 migrations and R2 binding.
-2. Generated/imported keys and codes work; disabled users/keys and cross-key list,
-   issuance and direct-download access are rejected; history remains verifiable.
-3. Nested folders, explicit multi-key ACL, admin-only files, moves and folder defaults
-   follow the documented rules; no inaccessible file metadata leaks.
-4. Multipart upload/retry/abort/finalization work, malformed APKs cannot become ready,
-   and same-name uploads retain independent identities.
-5. Real generic signed APKs preserve apksigner verification and certificates after
-   marking. Cover v2, v2+v3, v3.1 rotation and verity padding where tooling supports;
-   unsupported cases must be rejected or explicitly scoped before release.
-6. Extraction and normalized fingerprints round-trip; malformed/duplicate markers,
-   truncation, ZIP64, >2 GiB offsets and bounded reads have meaningful regressions.
-7. Stable full and range downloads, cross-segment ranges, HEAD/ETag/If-Range, rejected
-   ranges, revocation and private caching are verified end to end.
-8. Browser setup, public download and local trace are exercised through rendered UI;
-   responsive layouts, errors and user-visible wording are visually inspected.
-9. Typecheck, relevant tests, production build, deployment dry run and clean Git
-   history pass. CI runs reproducible checks with a lockfile and generated fixtures.
-10. Deployment, secrets, migrations, free-tier limits, supported APK cases, backup,
-    upgrade and security reporting are documented. Remote-only checks are reported
-    honestly and require a configured Cloudflare account; no paid resources created
-    implicitly. Publishing happens only after a concrete reviewable release exists.
+## 验收条件
+
+1. 在绑定 D1 迁移和 R2 的真实 Worker 运行时，验证首次初始化、并发保护、旧路径 404、登录/退出及密码/会话失效。
+2. 生成/导入密钥和提取码可用；拒绝停用用户/密钥以及跨密钥列表、签发和直接下载，历史仍可验证。
+3. 嵌套文件夹、明确的多密钥 ACL、仅管理员文件、移动与文件夹默认值符合规则，不泄露不可访问文件元数据。
+4. 分片上传、重试、中止和完成有效，错误 APK 不能变为 ready，同名上传保留独立身份。
+5. 通用真实签名 APK 写入标记后保留证书并通过 apksigner；工具支持时覆盖 v2、v2+v3、v3.1 轮换和 verity 填充。不支持情况在发布前明确拒绝或界定范围。
+6. 提取与规范化指纹可往返验证；错误/重复标记、截断、ZIP64、大于 2 GiB 偏移和有界读取有有效回归覆盖。
+7. 端到端验证完整/范围下载稳定性、跨片段范围、HEAD/ETag/If-Range、范围拒绝、撤权与私有缓存。
+8. 通过真实渲染界面测试浏览器初始化、公开下载和本地溯源；目视检查响应式布局、错误和用户文案。
+9. 类型检查、相关测试、生产构建、部署预演与干净 Git 历史通过；CI 使用锁文件和生成样本执行可复现检查。
+10. 完整记录部署、秘密、迁移、免费额度、支持的 APK、备份、升级和安全报告方式。诚实区分仅能在线验证的项目，须配置 Cloudflare 账户，不隐式创建付费资源；只有形成具体可审查版本后才公开。

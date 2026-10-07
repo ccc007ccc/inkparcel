@@ -1,104 +1,83 @@
-# HTTP and shared module contracts
+# HTTP 与共享模块契约
 
-This document fixes the v0.1 interface shared by the Worker and browser. JSON
-success bodies are direct objects; errors are `{error:{code,message}}`. Mutating
-requests require a same-origin `Origin` header, JSON except upload parts, and the
-appropriate HttpOnly cookie. All timestamps are ISO 8601 UTC. IDs are opaque strings.
+简体中文 | [English](en/API.md)
 
-## Routing and authentication
+本文定义 Worker 与浏览器共享的 v0.1 接口。JSON 成功响应直接返回对象，错误格式为 `{error:{code,message}}`。写操作必须提供同源 `Origin` 头和对应的 HttpOnly Cookie；除上传分片外，请求体使用 JSON。时间戳均为 ISO 8601 UTC，ID 均为不透明字符串。
 
-`A` below is the configured admin path (for example `/control-random`); it must never
-be compiled into frontend assets or returned by public discovery APIs.
+## 路由与认证
 
-| Method / path       | Request                                               | Response                                                                         |
+下文 `A` 表示配置的管理路径（例如 `/control-random`），不得编译进前端静态资源，也不得通过公开发现接口返回。
+
+| 方法 / 路径         | 请求                                                  | 响应                                                                             |
 | ------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------- |
 | GET `/api/site`     | —                                                     | `{name, initialized}`                                                            |
-| GET `/api/setup`    | —                                                     | `{available:true}` only before setup, otherwise 404                              |
-| POST `/api/setup`   | `{bootstrapToken,passwordKey,passwordSalt,adminPath}` | `{adminPath}` + admin cookie                                                     |
+| GET `/api/setup`    | —                                                     | 初始化前返回 `{available:true}`，之后为 404                                      |
+| POST `/api/setup`   | `{bootstrapToken,passwordKey,passwordSalt,adminPath}` | `{adminPath}` 与管理员 Cookie                                                    |
 | GET `A/api/auth`    | —                                                     | `{authenticated,passwordSalt,kdf:{algorithm:"PBKDF2-SHA256",iterations:600000}}` |
-| POST `A/api/login`  | `{passwordKey}`                                       | `{ok:true}` + admin cookie                                                       |
-| POST `A/api/logout` | —                                                     | `{ok:true}` + cleared cookie                                                     |
-| POST `/api/access`  | `{userId,code}`                                       | `{user:{id,userId},key:{id,name}}` + recipient cookie                            |
-| GET `/api/session`  | —                                                     | same session object or 401                                                       |
-| POST `/api/logout`  | —                                                     | `{ok:true}` + cleared recipient cookie                                           |
+| POST `A/api/login`  | `{passwordKey}`                                       | `{ok:true}` 与管理员 Cookie                                                      |
+| POST `A/api/logout` | —                                                     | `{ok:true}` 并清除管理员 Cookie                                                  |
+| POST `/api/access`  | `{userId,code}`                                       | `{user:{id,userId},key:{id,name}}` 与领取者 Cookie                               |
+| GET `/api/session`  | —                                                     | 同上会话对象，或 401                                                             |
+| POST `/api/logout`  | —                                                     | `{ok:true}` 并清除领取者 Cookie                                                  |
 
-`passwordKey` and `passwordSalt` are unpadded base64url: 32 derived bytes and at
-least 16 random salt bytes, respectively. The frontend derives the password key
-using WebCrypto PBKDF2-SHA256 (600,000 iterations, 256 output bits).
+`passwordKey` 与 `passwordSalt` 使用无填充 base64url，分别包含 32 字节派生值和至少 16 字节随机盐。前端通过 WebCrypto PBKDF2-SHA256 派生密码密钥，迭代 600,000 次，输出 256 位。
 
-Admin sessions last eight hours; recipient sessions last 24 hours. Revoked recipient
-sessions return 401 with `error.code=access_revoked`. Production HTTP GET/HEAD requests
-redirect to HTTPS; unsafe HTTP requests are rejected. Only explicit local mode on
-a loopback hostname allows HTTP development.
+管理员会话有效期 8 小时，领取者会话 24 小时。被撤销的领取会话返回 401，`error.code=access_revoked`。生产环境 HTTP GET/HEAD 跳转至 HTTPS，不安全的 HTTP 请求被拒绝；只有明确本地模式且使用回环主机名时才允许 HTTP 开发。
 
-## Recipient library
+## 领取者文件库
 
-| Method / path                   | Request                               | Response                                          |
-| ------------------------------- | ------------------------------------- | ------------------------------------------------- |
-| GET `/api/files`                | `folderId` optional, `page` default 1 | `{files,folders,breadcrumbs,total,page,pageSize}` |
-| POST `/api/files/:id/downloads` | `{}`                                  | `{id,url,fileName}`                               |
-| GET / HEAD `/api/downloads/:id` | standard HTTP range headers           | personalized attachment stream                    |
+| 方法 / 路径                     | 请求                           | 响应                                              |
+| ------------------------------- | ------------------------------ | ------------------------------------------------- |
+| GET `/api/files`                | 可选 `folderId`，`page` 默认 1 | `{files,folders,breadcrumbs,total,page,pageSize}` |
+| POST `/api/files/:id/downloads` | `{}`                           | `{id,url,fileName}`                               |
+| GET / HEAD `/api/downloads/:id` | 标准 HTTP 范围头               | 个性化附件流                                      |
 
-Public file objects: `{id,name,size,uploadedAt}`. Folder objects:
-`{id,name,parentId}`. Breadcrumbs contain ancestor folder objects. Only visible
-files/folders are returned. Root is `folderId=null` (omit query parameter).
+公开文件对象为 `{id,name,size,uploadedAt}`，文件夹为 `{id,name,parentId}`。面包屑包含祖先文件夹对象，只返回可见文件和文件夹。根目录为 `folderId=null`（省略查询参数）。
 
-Downloads are bound to the recipient session's user AND key. Byte ranges refer to
-the personalized bytes. Authentication/authorization is checked on every request.
-`fileName` is the effective attachment name: a missing supported extension is
-appended using the format registry. Display names remain unchanged in file lists.
+下载同时绑定领取会话的用户与密钥，字节范围以个性化输出为准。每次请求均校验身份和权限。`fileName` 为实际附件名：缺少受支持扩展名时按格式注册表补齐，文件列表中的显示名称不变。
 
-## Administration
+## 管理接口
 
-All following paths are prefixed with `A/api` and require admin authentication.
+以下路径均以 `A/api` 为前缀，并要求管理员认证。
 
-| Method / path                    | Request                                             | Response                                                        |
-| -------------------------------- | --------------------------------------------------- | --------------------------------------------------------------- |
-| GET `/keys`                      | —                                                   | `{items:Key[]}`                                                 |
-| POST `/keys`                     | `{name,secret?}`; omitted secret generates 32 bytes | `{key:Key,secret}` (secret displayed once)                      |
-| PATCH `/keys/:id`                | `{name?,enabled?}`                                  | `{key:Key}`                                                     |
-| POST `/keys/:id/code`            | `{userId}`                                          | `{userId,code}`                                                 |
-| GET `/folders`                   | —                                                   | `{items:Folder[]}`                                              |
-| POST `/folders`                  | `{name,parentId?,defaultKeyIds?}`                   | `{folder:Folder}`                                               |
-| PATCH `/folders/:id`             | `{name?,parentId?,defaultKeyIds?}`                  | `{folder:Folder}`                                               |
-| DELETE `/folders/:id`            | empty folders only                                  | `{ok:true}`                                                     |
-| GET `/files`                     | `folderId`, `page`, `q` optional                    | `{files:AdminFile[],total,page,pageSize}`                       |
-| PATCH `/files/:id`               | `{name?,folderId?,keyIds?}`                         | `{file:AdminFile}`                                              |
-| DELETE `/files/:id`              | retire metadata and remove R2 object                | `{ok:true}`                                                     |
-| POST `/uploads`                  | `{fileName,size,folderId?,keyIds,fingerprint}`      | `{fileId,partSize,partCount}`                                   |
-| GET `/uploads/:id`               | —                                                   | `{fileId,partSize,partCount,parts:[{partNumber,etag,size}]}`    |
-| PUT `/uploads/:id/parts/:number` | binary part body                                    | `{partNumber,etag,size}`                                        |
-| POST `/uploads/:id/complete`     | `{}`                                                | `{file:AdminFile}`                                              |
-| DELETE `/uploads/:id`            | abort incomplete upload                             | `{ok:true}`                                                     |
-| GET `/users`                     | `q`, `page` optional                                | `{items:User[],total,page,pageSize}`                            |
-| PATCH `/users/:id`               | `{notes?,blocked?}`                                 | `{user:User}`                                                   |
-| GET `/downloads`                 | `userId`, `keyId`, `fileId`, `q`, `page` optional   | `{items:Download[],total,page,pageSize}`                        |
-| POST `/trace`                    | `{marker,fingerprint?}`                             | `{authentic:true,contentMatch,record,user,key,file,signedName}` |
-| GET `/settings`                  | —                                                   | `{siteName,adminPath,ipRetentionDays}`                          |
-| PATCH `/settings`                | `{siteName?,adminPath?,ipRetentionDays?}`           | updated settings                                                |
-| POST `/password`                 | `{currentPasswordKey,passwordKey,passwordSalt}`     | `{ok:true}`; existing admin sessions invalidated                |
+| 方法 / 路径                      | 请求                                               | 响应                                                            |
+| -------------------------------- | -------------------------------------------------- | --------------------------------------------------------------- |
+| GET `/keys`                      | —                                                  | `{items:Key[]}`                                                 |
+| POST `/keys`                     | `{name,secret?}`，省略 secret 时生成 32 字节秘密值 | `{key:Key,secret}`，秘密值仅显示一次                            |
+| PATCH `/keys/:id`                | `{name?,enabled?}`                                 | `{key:Key}`                                                     |
+| POST `/keys/:id/code`            | `{userId}`                                         | `{userId,code}`                                                 |
+| GET `/folders`                   | —                                                  | `{items:Folder[]}`                                              |
+| POST `/folders`                  | `{name,parentId?,defaultKeyIds?}`                  | `{folder:Folder}`                                               |
+| PATCH `/folders/:id`             | `{name?,parentId?,defaultKeyIds?}`                 | `{folder:Folder}`                                               |
+| DELETE `/folders/:id`            | 仅允许空文件夹                                     | `{ok:true}`                                                     |
+| GET `/files`                     | 可选 `folderId`、`page`、`q`                       | `{files:AdminFile[],total,page,pageSize}`                       |
+| PATCH `/files/:id`               | `{name?,folderId?,keyIds?}`                        | `{file:AdminFile}`                                              |
+| DELETE `/files/:id`              | 退役元数据并移除 R2 对象                           | `{ok:true}`                                                     |
+| POST `/uploads`                  | `{fileName,size,folderId?,keyIds,fingerprint}`     | `{fileId,partSize,partCount}`                                   |
+| GET `/uploads/:id`               | —                                                  | `{fileId,partSize,partCount,parts:[{partNumber,etag,size}]}`    |
+| PUT `/uploads/:id/parts/:number` | 二进制分片请求体                                   | `{partNumber,etag,size}`                                        |
+| POST `/uploads/:id/complete`     | `{}`                                               | `{file:AdminFile}`                                              |
+| DELETE `/uploads/:id`            | 中止未完成上传                                     | `{ok:true}`                                                     |
+| GET `/users`                     | 可选 `q`、`page`                                   | `{items:User[],total,page,pageSize}`                            |
+| PATCH `/users/:id`               | `{notes?,blocked?}`                                | `{user:User}`                                                   |
+| GET `/downloads`                 | 可选 `userId`、`keyId`、`fileId`、`q`、`page`      | `{items:Download[],total,page,pageSize}`                        |
+| POST `/trace`                    | `{marker,fingerprint?}`                            | `{authentic:true,contentMatch,record,user,key,file,signedName}` |
+| GET `/settings`                  | —                                                  | `{siteName,adminPath,ipRetentionDays}`                          |
+| PATCH `/settings`                | `{siteName?,adminPath?,ipRetentionDays?}`          | 更新后的设置                                                    |
+| POST `/password`                 | `{currentPasswordKey,passwordKey,passwordSalt}`    | `{ok:true}`，原管理员会话失效                                   |
 
-- `Key`: `{id,code,name,enabled,createdAt}`. Imported secrets use 32-byte base64url.
-- `Folder`: `{id,name,parentId,defaultKeyIds}`.
-- `AdminFile`: `{id,name,originalName,folderId,size,fingerprint,keyIds,status,uploadedAt}`.
-- `User`: `{id,userId,firstSeenAt,lastSeenAt,notes,blocked}`.
-  Notes permit multiline text (CRLF becomes LF); other identity/name fields remain
-  single-line. Unpaired UTF-16 surrogates and unsupported control characters reject.
-- `Download`: `{id,userId,userName,keyId,keyName,fileId,fileName,createdAt,ip,status}`;
-  `userId` is the internal ID, `userName` is the external user-defined identifier.
-- `contentMatch` is boolean when a fingerprint is provided, otherwise null. Invalid
-  envelopes produce a descriptive error; unknown/deleted objects do not erase valid
-  provenance. Never return raw secrets or full markers in ordinary list responses.
-- Lists use page size 50, capped internally. `q` is a bounded literal search string.
-- The current installation supports 100 keys and 1000 folders. ACL updates use bulk
-  SQL within a transaction, including when selecting all 100 keys.
+- `Key`：`{id,code,name,enabled,createdAt}`。导入秘密值使用 32 字节 base64url。
+- `Folder`：`{id,name,parentId,defaultKeyIds}`。
+- `AdminFile`：`{id,name,originalName,folderId,size,fingerprint,keyIds,status,uploadedAt}`。
+- `User`：`{id,userId,firstSeenAt,lastSeenAt,notes,blocked}`。备注支持多行（CRLF 转为 LF），其他身份/名称字段只允许单行。拒绝未配对 UTF-16 代理项和不支持的控制字符。
+- `Download`：`{id,userId,userName,keyId,keyName,fileId,fileName,createdAt,ip,status}`；`userId` 是内部 ID，`userName` 是外部自定标识。
+- 提供指纹时 `contentMatch` 为布尔值，否则为 null。无效封装返回具体错误；未知或已删除对象不得抹去有效溯源记录。普通列表不得返回原始秘密值或完整标记。
+- 列表每页 50 条，内部限制页大小；`q` 是有长度上限的字面搜索字符串。
+- 当前安装最多支持 100 个密钥和 1000 个文件夹。ACL 更新在事务内使用批量 SQL，即使一次选中全部 100 个密钥也是如此。
 
-## Marking package
+## 标记包
 
-Binary parsing, supported signatures and fingerprint normalization are defined in
-[APK format](apk-format.md).
-
-Package name: `@inkparcel/marking`. Implementation lives in `packages/marking`.
+二进制解析、支持的签名和指纹规范化见 [APK 格式](apk-format.md)。包名为 `@inkparcel/marking`，实现位于 `packages/marking`。
 
 ```ts
 export interface ByteRange {
@@ -142,14 +121,6 @@ export function formatFor(fileName: string): FileFormat;
 export const supportedExtensions: readonly string[];
 ```
 
-Fingerprint output is lowercase 64-character SHA-256 hex. The APK implementation
-must document its normalization and preserve original signing identity. The marker
-is opaque UTF-8 authenticated-envelope text to this package. Worker/browser code
-uses TextEncoder/TextDecoder only at envelope boundaries.
+指纹输出为 64 字符小写 SHA-256 十六进制。APK 实现必须记录规范化算法并保留原始签名身份。对本包而言，标记是语义不透明的 UTF-8 认证封装文本；Worker/浏览器仅在封装边界使用 TextEncoder/TextDecoder。
 
-The APK descriptor is `id="apk"`, `version="apk-v1"`, `extensions=[".apk"]`.
-Its preflight guarantees space for any permitted marker before an upload becomes
-ready. Stored format versions are checked during finalization, issuance and download;
-a mismatched handler version returns 409 instead of changing an existing issuance's
-bytes. Add a new format module and registry entry to supply marking/extraction,
-fingerprinting, preflight and media metadata without format branches in the workflow.
+APK 描述符为 `id="apk"`、`version="apk-v1"`、`extensions=[".apk"]`。预检保证上传变为 ready 前，任何允许的标记都能写入。完成上传、签发和下载时检查存储的格式版本；不匹配返回 409，不能改变已有签发的字节。添加新格式模块与注册项即可提供标记/提取、指纹、预检与媒体元数据，无需在工作流中添加格式分支。
