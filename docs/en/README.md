@@ -11,7 +11,7 @@ associated recipient and file version. The selected file is never uploaded for t
 
 InkParcel runs on Cloudflare Workers, R2 and D1. Its first format handler supports
 Android APKs using a custom APK Signing Block entry, without the publisher's signing
-key or a re-signing step. The responsive interface and default documentation are in Chinese; English documentation is available in this directory.
+key or a re-signing step. The responsive interface supports Chinese and English, defaulting to Chinese. English documentation is available in this directory.
 
 ![InkParcel recipient page](../assets/preview.png)
 

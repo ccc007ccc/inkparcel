@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { useEffect, useRef, useState } from 'react';
 import { ArrowUpFromLine, FileBox, Pause, Play, RefreshCw, X } from 'lucide-react';
 import { blobSource, formatFor, supportedExtensions } from '@inkparcel/marking';
@@ -86,7 +87,7 @@ export function UploadModal({
     }
   }
   function close() {
-    if (busy && !confirm('关闭后暂停上传。你可以稍后重新选择同一个文件继续。')) return;
+    if (busy && !confirm(t('关闭后暂停上传。你可以稍后重新选择同一个文件继续。'))) return;
     controller.current?.abort();
     onClose();
   }
@@ -123,7 +124,11 @@ export function UploadModal({
             throw new Error('文件与待恢复的上传不一致，请重新选择原始文件。');
           current = resume;
         } else {
-          const result = await post<{ fileId: string; partSize: number; partCount: number }>(
+          const result = await post<{
+            fileId: string;
+            partSize: number;
+            partCount: number;
+          }>(
             `${base}/api/uploads`,
             {
               fileName: file.name,
@@ -163,7 +168,7 @@ export function UploadModal({
     }
   }
   async function cancel(saved: SavedUpload) {
-    if (!confirm(`取消“${saved.name}”的上传并清除已传分片？`)) return;
+    if (!confirm(t('取消“{{value0}}”的上传并清除已传分片？', { value0: saved.name }))) return;
     controller.current?.abort();
     setError('');
     try {
@@ -183,10 +188,12 @@ export function UploadModal({
     }
   }
   return (
-    <Modal title="上传文件" onClose={close} wide>
+    <Modal title={t('上传文件')} onClose={close} wide>
       <div className="stack">
         <p className="muted">
-          上传到 <strong>{folder?.name ?? '全部文件'}</strong>。新上传会保留为独立版本。
+          {t('上传到')}
+          <strong>{folder?.name ?? t('全部文件')}</strong>
+          {t('。新上传会保留为独立版本。')}
         </p>
         {!session && (
           <>
@@ -195,7 +202,7 @@ export function UploadModal({
               ref={input}
               type="file"
               accept={supportedExtensions.join(',')}
-              aria-label="选择 APK 文件"
+              aria-label={t('选择 APK 文件')}
               onChange={(event) => choose(event.target.files?.[0])}
               disabled={busy || resumeBlocked}
             />
@@ -218,16 +225,20 @@ export function UploadModal({
                 {file
                   ? file.name
                   : resume
-                    ? `选择原始文件：${resume.name}`
-                    : '拖入 APK，或点击选择'}
+                    ? t('选择原始文件：{{value0}}', { value0: resume.name })
+                    : t('拖入 APK，或点击选择')}
               </strong>
-              <span>{file ? bytes(file.size) : '支持大文件分片上传 · 中断后可继续'}</span>
+              <span>{file ? bytes(file.size) : t('支持大文件分片上传 · 中断后可继续')}</span>
             </button>
             {!resume && !initialFile && (
               <KeyPicker keys={keys} value={keyIds} onChange={setKeyIds} />
             )}
             {resume && (
-              <Alert kind="info">正在恢复“{resume.name}”。将先在本地验证文件一致性。</Alert>
+              <Alert kind="info">
+                {t('正在恢复“')}
+                {resume.name}
+                {t('”。将先在本地验证文件一致性。')}
+              </Alert>
             )}
           </>
         )}
@@ -245,24 +256,24 @@ export function UploadModal({
             <div>
               <span>
                 {stage === 'hashing'
-                  ? '本地检查与内容指纹计算'
+                  ? t('本地检查与内容指纹计算')
                   : stage === 'uploading'
                     ? progress >= 1
-                      ? '分片已传完，正在校验文件…'
-                      : '正在上传分片'
+                      ? t('分片已传完，正在校验文件…')
+                      : t('正在上传分片')
                     : stage === 'complete'
-                      ? '文件已入库'
-                      : '上传已暂停'}
+                      ? t('文件已入库')
+                      : t('上传已暂停')}
               </span>
               <strong>{Math.min(100, Math.round(progress * 100))}%</strong>
             </div>
-            <progress max={1} value={progress} aria-label="上传进度" />
+            <progress max={1} value={progress} aria-label={t('上传进度')} />
             {stage === 'hashing' && (
-              <p className="muted small">文件在浏览器中逐段读取，无需一次载入内存。</p>
+              <p className="muted small">{t('文件在浏览器中逐段读取，无需一次载入内存。')}</p>
             )}
           </div>
         )}
-        {initialFile && resumeLoad === 'loading' && <Spinner label="正在读取上传会话…" />}
+        {initialFile && resumeLoad === 'loading' && <Spinner label={t('正在读取上传会话…')} />}
         <Alert>{error}</Alert>
         {initialFile && resumeLoad === 'failed' && (
           <button
@@ -273,13 +284,13 @@ export function UploadModal({
             }}
           >
             <RefreshCw size={17} />
-            重新读取上传会话
+            {t('重新读取上传会话')}
           </button>
         )}
         {stage === 'complete' ? (
           <div className="modal-actions">
             <button className="button button-primary" onClick={onClose}>
-              完成
+              {t('完成')}
             </button>
           </div>
         ) : (
@@ -290,7 +301,7 @@ export function UploadModal({
                 disabled={stage === 'hashing'}
                 onClick={() => void cancel(session)}
               >
-                取消上传
+                {t('取消上传')}
               </button>
             )}
             {busy ? (
@@ -302,7 +313,7 @@ export function UploadModal({
                 }}
               >
                 <Pause size={16} />
-                暂停
+                {t('暂停')}
               </button>
             ) : (
               <button
@@ -311,14 +322,14 @@ export function UploadModal({
                 onClick={() => void start()}
               >
                 {stage === 'paused' ? <RefreshCw size={17} /> : <ArrowUpFromLine size={17} />}
-                {stage === 'paused' ? '重试 / 继续' : '检查并上传'}
+                {stage === 'paused' ? t('重试 / 继续') : t('检查并上传')}
               </button>
             )}
           </div>
         )}
         {pending.length > 0 && !session && !initialFile && (
           <div className="pending-uploads">
-            <h3>尚未完成的上传</h3>
+            <h3>{t('尚未完成的上传')}</h3>
             {pending.map((item) => (
               <div key={item.fileId}>
                 <span title={item.name}>
@@ -327,7 +338,7 @@ export function UploadModal({
                 </span>
                 <button
                   className="icon-button"
-                  aria-label={`恢复 ${item.name}`}
+                  aria-label={t('恢复 {{value0}}', { value0: item.name })}
                   onClick={() => {
                     setResume(item);
                     setFile(undefined);
@@ -340,7 +351,7 @@ export function UploadModal({
                 </button>
                 <button
                   className="icon-button"
-                  aria-label={`取消 ${item.name}`}
+                  aria-label={t('取消 {{value0}}', { value0: item.name })}
                   onClick={() => void cancel(item)}
                   disabled={busy || resumeBlocked}
                 >

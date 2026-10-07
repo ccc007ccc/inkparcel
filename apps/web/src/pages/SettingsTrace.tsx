@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { useSite } from '../site';
 import { useRef, useState, useEffect, type FormEvent } from 'react';
 import {
@@ -67,7 +68,7 @@ export function TracePage({ base }: AdminProps) {
       }
       setStage('hashing');
       const fingerprint = await format.fingerprint(source, (done, total) => {
-        if (current !== run.current) throw new DOMException('已取消', 'AbortError');
+        if (current !== run.current) throw new DOMException(t('已取消'), 'AbortError');
         setProgress(total ? done / total : 0);
       });
       if (current !== run.current) return;
@@ -83,8 +84,8 @@ export function TracePage({ base }: AdminProps) {
   }
   return (
     <>
-      <PageHeading eyebrow="VERIFY THE ORIGIN" title="文件溯源">
-        从文件中读取专属标记，核验它对应的领取者与版本。
+      <PageHeading eyebrow={t('VERIFY THE ORIGIN')} title={t('文件溯源')}>
+        {t('从文件中读取专属标记，核验它对应的领取者与版本。')}
       </PageHeading>
       <div className="trace-layout">
         <section>
@@ -93,7 +94,7 @@ export function TracePage({ base }: AdminProps) {
             className="sr-only"
             type="file"
             accept={supportedExtensions.join(',')}
-            aria-label="选择待溯源文件"
+            aria-label={t('选择待溯源文件')}
             onChange={(event) => {
               const file = event.target.files?.[0];
               if (file) void inspect(file);
@@ -112,9 +113,9 @@ export function TracePage({ base }: AdminProps) {
             }}
           >
             <Fingerprint size={43} strokeWidth={1.2} />
-            <strong>选择要验证的文件</strong>
-            <span>拖放文件到这里，或点击选择</span>
-            <span className="tag">当前支持 APK</span>
+            <strong>{t('选择要验证的文件')}</strong>
+            <span>{t('拖放文件到这里，或点击选择')}</span>
+            <span className="tag">{t('当前支持 APK')}</span>
           </button>
           {file && (
             <div className="upload-file">
@@ -130,15 +131,15 @@ export function TracePage({ base }: AdminProps) {
               <Spinner
                 label={
                   stage === 'extracting'
-                    ? '正在本地读取标记…'
+                    ? t('正在本地读取标记…')
                     : stage === 'hashing'
-                      ? '正在本地核对内容指纹…'
-                      : '正在验证领取记录…'
+                      ? t('正在本地核对内容指纹…')
+                      : t('正在验证领取记录…')
                 }
               />
               {stage === 'hashing' && (
                 <>
-                  <progress value={progress} max={1} aria-label="本地指纹计算进度" />
+                  <progress value={progress} max={1} aria-label={t('本地指纹计算进度')} />
                   <span className="muted small">{Math.round(progress * 100)}%</span>
                 </>
               )}
@@ -147,29 +148,29 @@ export function TracePage({ base }: AdminProps) {
           <Alert>{error}</Alert>
         </section>
         <aside className="trace-explainer">
-          <span className="eyebrow">LOCAL FIRST</span>
-          <h2>文件留在你的浏览器。</h2>
-          <p>标记读取和内容指纹计算都在本地完成。服务端只接收标记与指纹，不接收所选文件。</p>
+          <span className="eyebrow">{t('LOCAL FIRST')}</span>
+          <h2>{t('文件留在你的浏览器。')}</h2>
+          <p>{t('标记读取和内容指纹计算都在本地完成。服务端只接收标记与指纹，不接收所选文件。')}</p>
           <ol>
             <li>
               <span>01</span>
               <div>
-                <strong>本地读取</strong>
-                <p>提取文件中的专属标记。</p>
+                <strong>{t('本地读取')}</strong>
+                <p>{t('提取文件中的专属标记。')}</p>
               </div>
             </li>
             <li>
               <span>02</span>
               <div>
-                <strong>内容比对</strong>
-                <p>验证文件内容是否与签发版本一致。</p>
+                <strong>{t('内容比对')}</strong>
+                <p>{t('验证文件内容是否与签发版本一致。')}</p>
               </div>
             </li>
             <li>
               <span>03</span>
               <div>
-                <strong>核验来处</strong>
-                <p>关联领取者、版本及领取记录。</p>
+                <strong>{t('核验来处')}</strong>
+                <p>{t('关联领取者、版本及领取记录。')}</p>
               </div>
             </li>
           </ol>
@@ -180,8 +181,8 @@ export function TracePage({ base }: AdminProps) {
           <div className="result-heading">
             <CheckCircle2 size={27} />
             <div>
-              <h2>标记验证通过</h2>
-              <p>该标记对应本站的一次真实签发。</p>
+              <h2>{t('标记验证通过')}</h2>
+              <p>{t('该标记对应本站的一次真实签发。')}</p>
             </div>
           </div>
           <div className={`content-verdict ${result.contentMatch ? 'match' : 'mismatch'}`}>
@@ -189,44 +190,44 @@ export function TracePage({ base }: AdminProps) {
             <div>
               <strong>
                 {result.contentMatch === true
-                  ? '文件内容与签发版本一致'
+                  ? t('文件内容与签发版本一致')
                   : result.contentMatch === false
-                    ? '文件内容与签发版本不一致'
-                    : '未核验文件内容'}
+                    ? t('文件内容与签发版本不一致')
+                    : t('未核验文件内容')}
               </strong>
               <p>
                 {result.contentMatch === true
-                  ? '规范化内容指纹匹配，版本与签名身份一致。'
-                  : '标记有效不能证明此文件就是当时签发的完整文件。请结合其他证据判断。'}
+                  ? t('规范化内容指纹匹配，版本与签名身份一致。')
+                  : t('标记有效不能证明此文件就是当时签发的完整文件。请结合其他证据判断。')}
               </p>
             </div>
           </div>
           <dl className="trace-details">
             <div>
-              <dt>领取者</dt>
+              <dt>{t('领取者')}</dt>
               <dd>{result.user.userId}</dd>
             </div>
             <div>
-              <dt>访问密钥</dt>
+              <dt>{t('访问密钥')}</dt>
               <dd>
                 {result.key.name}
-                {!result.key.enabled && <span className="tag">已停用</span>}
+                {!result.key.enabled && <span className="tag">{t('已停用')}</span>}
               </dd>
             </div>
             <div>
-              <dt>签发时的文件名</dt>
+              <dt>{t('签发时的文件名')}</dt>
               <dd>{result.signedName}</dd>
             </div>
             <div>
-              <dt>领取时间</dt>
+              <dt>{t('领取时间')}</dt>
               <dd>{date(result.record.createdAt, true)}</dd>
             </div>
             <div>
-              <dt>文件版本</dt>
+              <dt>{t('文件版本')}</dt>
               <dd className="mono">{result.file.id}</dd>
             </div>
             <div>
-              <dt>领取编号</dt>
+              <dt>{t('领取编号')}</dt>
               <dd className="mono">{result.record.id}</dd>
             </div>
           </dl>
@@ -234,7 +235,9 @@ export function TracePage({ base }: AdminProps) {
       )}
       <div className="inline-note">
         <ShieldCheck size={19} />
-        <p>溯源结果用于确认签发关联。标记可能被移除或复制，不能仅凭标记认定某个人造成了泄露。</p>
+        <p>
+          {t('溯源结果用于确认签发关联。标记可能被移除或复制，不能仅凭标记认定某个人造成了泄露。')}
+        </p>
       </div>
     </>
   );
@@ -272,7 +275,7 @@ export function SettingsPage({ base }: AdminProps) {
     if (!settings) return;
     if (
       path !== settings.adminPath &&
-      !confirm(`将管理入口改为 ${path}？旧地址会立即失效，请保存新地址。`)
+      !confirm(t('将管理入口改为 {{value0}}？旧地址会立即失效，请保存新地址。', { value0: path }))
     )
       return;
     setBusy(true);
@@ -314,7 +317,10 @@ export function SettingsPage({ base }: AdminProps) {
         image.close();
         if (!valid) throw new Error('图标宽高不能超过 1024 像素。');
       }
-      const result = await api<{ iconUrl: string; hasCustomIcon: boolean }>(
+      const result = await api<{
+        iconUrl: string;
+        hasCustomIcon: boolean;
+      }>(
         `${base}/api/site-icon`,
         file
           ? {
@@ -341,7 +347,9 @@ export function SettingsPage({ base }: AdminProps) {
     }
     setPasswordBusy(true);
     try {
-      const auth = await api<{ passwordSalt: string }>(`${base}/api/auth`);
+      const auth = await api<{
+        passwordSalt: string;
+      }>(`${base}/api/auth`);
       const salt = passwordSalt();
       const currentPasswordKey = await passwordKey(current, auth.passwordSalt);
       const next = await passwordKey(password, salt);
@@ -361,8 +369,8 @@ export function SettingsPage({ base }: AdminProps) {
   }
   return (
     <>
-      <PageHeading eyebrow="YOUR WORKSPACE" title="站点设置">
-        管理站点身份、访问入口与记录保留方式。
+      <PageHeading eyebrow={t('YOUR WORKSPACE')} title={t('站点设置')}>
+        {t('管理站点身份、访问入口与记录保留方式。')}
       </PageHeading>
       {!settings && !error ? (
         <Spinner />
@@ -370,11 +378,11 @@ export function SettingsPage({ base }: AdminProps) {
         <>
           <form className="settings-section" onSubmit={save}>
             <div className="settings-intro">
-              <h2>基本设置</h2>
-              <p>这些设置仅影响当前部署。</p>
+              <h2>{t('基本设置')}</h2>
+              <p>{t('这些设置仅影响当前部署。')}</p>
             </div>
             <div className="stack">
-              <Field label="站点名称">
+              <Field label={t('站点名称')}>
                 <input
                   required
                   maxLength={80}
@@ -383,20 +391,28 @@ export function SettingsPage({ base }: AdminProps) {
                 />
               </Field>
               <div className="field">
-                <span>网站图标</span>
+                <span>{t('网站图标')}</span>
                 <div className="site-icon-settings">
-                  <img src={site.iconUrl} alt="当前网站图标" width={48} height={48} />
-                  <input
-                    type="file"
-                    accept="image/png,.png"
-                    aria-label="上传网站图标"
-                    disabled={iconBusy}
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      event.target.value = '';
-                      if (file) void updateIcon(file);
-                    }}
-                  />
+                  {site.hasCustomIcon ? (
+                    <img src={site.iconUrl} alt={t('当前网站图标')} width={48} height={48} />
+                  ) : (
+                    <span className="muted">{t('未设置自定义图标')}</span>
+                  )}
+                  <label className="button button-secondary">
+                    {t('上传网站图标')}
+                    <input
+                      className="sr-only"
+                      type="file"
+                      accept="image/png,.png"
+                      aria-label={t('上传网站图标')}
+                      disabled={iconBusy}
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        event.target.value = '';
+                        if (file) void updateIcon(file);
+                      }}
+                    />
+                  </label>
                   {settings?.hasCustomIcon && (
                     <button
                       type="button"
@@ -404,20 +420,23 @@ export function SettingsPage({ base }: AdminProps) {
                       disabled={iconBusy}
                       onClick={() => void updateIcon()}
                     >
-                      恢复默认图标
+                      {t('清除图标')}
                     </button>
                   )}
                 </div>
                 <small>
-                  PNG 图片，最大 256 KiB，宽高不超过 1024
-                  像素，建议正方形。上传后立即应用于页眉和浏览器标签页。
+                  {t(
+                    'PNG 图片，最大 256 KiB，宽高不超过 1024 像素，建议正方形。上传后立即应用于页眉和浏览器标签页。',
+                  )}
                 </small>
-                {iconBusy && <Spinner label="正在更新图标…" />}
+                {iconBusy && <Spinner label={t('正在更新图标…')} />}
                 <Alert>{iconError}</Alert>
               </div>
               <Field
-                label="隐匿模式"
-                hint="开启后只显示提取、文件列表和下载，隐藏溯源说明与项目宣传。标记和后台溯源照常工作；此选项不增强标记的抗移除能力。"
+                label={t('隐匿模式')}
+                hint={t(
+                  '开启后只显示提取、文件列表和下载，隐藏溯源说明与项目宣传。标记和后台溯源照常工作；此选项不增强标记的抗移除能力。',
+                )}
               >
                 <span className="checkbox-label">
                   <input
@@ -425,12 +444,14 @@ export function SettingsPage({ base }: AdminProps) {
                     checked={stealthMode}
                     onChange={(event) => setStealthMode(event.target.checked)}
                   />
-                  使用简洁领取页
+                  {t('使用简洁领取页')}
                 </span>
               </Field>
               <Field
-                label="管理入口"
-                hint="1–64 个英文字母、数字、下划线或连字符，例如 manage 或 /manage，无需包含横线。不可用 admin、api 等系统保留名称，不支持多级路径。修改后旧路径返回 404，请保存新地址。"
+                label={t('管理入口')}
+                hint={t(
+                  '1–64 个英文字母、数字、下划线或连字符，例如 manage 或 /manage，无需包含横线。不可用 admin、api 等系统保留名称，不支持多级路径。修改后旧路径返回 404，请保存新地址。',
+                )}
               >
                 <input
                   required
@@ -443,8 +464,8 @@ export function SettingsPage({ base }: AdminProps) {
                 />
               </Field>
               <Field
-                label="IP 地址保留天数"
-                hint="只清理 IP，不影响用户、文件版本与历史溯源关系。设为 0 时不保留 IP。"
+                label={t('IP 地址保留天数')}
+                hint={t('只清理 IP，不影响用户、文件版本与历史溯源关系。设为 0 时不保留 IP。')}
               >
                 <input
                   required
@@ -459,18 +480,18 @@ export function SettingsPage({ base }: AdminProps) {
               <Alert kind="success">{success}</Alert>
               <div>
                 <button className="button button-primary" disabled={busy || !settings}>
-                  {busy ? <Spinner label="保存中" /> : '保存站点设置'}
+                  {busy ? <Spinner label={t('保存中')} /> : t('保存站点设置')}
                 </button>
               </div>
             </div>
           </form>
           <form className="settings-section" onSubmit={changePassword}>
             <div className="settings-intro">
-              <h2>管理员密码</h2>
-              <p>更新密码会使所有现有管理会话失效。</p>
+              <h2>{t('管理员密码')}</h2>
+              <p>{t('更新密码会使所有现有管理会话失效。')}</p>
             </div>
             <div className="stack">
-              <Field label="当前密码">
+              <Field label={t('当前密码')}>
                 <input
                   required
                   type="password"
@@ -479,7 +500,7 @@ export function SettingsPage({ base }: AdminProps) {
                   onChange={(event) => setCurrent(event.target.value)}
                 />
               </Field>
-              <Field label="新密码">
+              <Field label={t('新密码')}>
                 <input
                   required
                   minLength={12}
@@ -487,10 +508,10 @@ export function SettingsPage({ base }: AdminProps) {
                   autoComplete="new-password"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
-                  placeholder="至少 12 个字符"
+                  placeholder={t('至少 12 个字符')}
                 />
               </Field>
-              <Field label="确认新密码">
+              <Field label={t('确认新密码')}>
                 <input
                   required
                   minLength={12}
@@ -504,11 +525,11 @@ export function SettingsPage({ base }: AdminProps) {
               <div>
                 <button className="button button-secondary" disabled={passwordBusy}>
                   {passwordBusy ? (
-                    <Spinner label="安全更新中…" />
+                    <Spinner label={t('安全更新中…')} />
                   ) : (
                     <>
                       <LockKeyhole size={16} />
-                      更新密码并重新登录
+                      {t('更新密码并重新登录')}
                     </>
                   )}
                 </button>
@@ -519,8 +540,8 @@ export function SettingsPage({ base }: AdminProps) {
       )}
       <div className="settings-brand">
         <span className="brand-word">{site.name}</span>
-        <span>每一份，都有来处。</span>
-        <p>开放源代码 · 自托管文件分发</p>
+        <span>{t('每一份，都有来处。')}</span>
+        <p>{t('开放源代码 · 自托管文件分发')}</p>
       </div>
     </>
   );

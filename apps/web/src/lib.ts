@@ -1,3 +1,4 @@
+import { t, i18n, getLocale, errorMessageKey } from './i18n';
 export interface Key {
   id: string;
   code: string;
@@ -45,8 +46,14 @@ export interface Download {
   status: string;
 }
 export interface Session {
-  user: { id: string; userId: string };
-  key: { id: string; name: string };
+  user: {
+    id: string;
+    userId: string;
+  };
+  key: {
+    id: string;
+    name: string;
+  };
 }
 export interface PageResult<T> {
   items: T[];
@@ -93,7 +100,7 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
     const error = new ApiError(
       response.status,
       body?.error?.code ?? 'request_failed',
-      body?.error?.message ?? `请求失败（${response.status}），请稍后重试。`,
+      body?.error?.message ?? t('error.request_failed'),
     );
     if (
       typeof window !== 'undefined' &&
@@ -101,7 +108,7 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
     ) {
       window.dispatchEvent(
         new CustomEvent<AuthExpired>(authExpiredEvent, {
-          detail: { path, code: error.code, message: error.message },
+          detail: { path, code: error.code, message: errorMessageKey(error.code) },
         }),
       );
     }
@@ -113,7 +120,10 @@ export const post = <T>(path: string, data: unknown = {}, signal?: AbortSignal) 
   api<T>(path, { method: 'POST', body: JSON.stringify(data), signal });
 export const patch = <T>(path: string, data: unknown) =>
   api<T>(path, { method: 'PATCH', body: JSON.stringify(data) });
-export const remove = (path: string) => api<{ ok: true }>(path, { method: 'DELETE' });
+export const remove = (path: string) =>
+  api<{
+    ok: true;
+  }>(path, { method: 'DELETE' });
 export function query(values: Record<string, string | number | null | undefined>) {
   const search = new URLSearchParams();
   for (const [name, value] of Object.entries(values))
@@ -121,18 +131,21 @@ export function query(values: Record<string, string | number | null | undefined>
   return search.size ? `?${search}` : '';
 }
 export function message(error: unknown) {
-  return error instanceof Error ? error.message : '发生了意外错误，请重试。';
+  if (error instanceof ApiError) return errorMessageKey(error.code);
+  if (error instanceof Error && i18n.exists(error.message)) return error.message;
+  if (error instanceof Error && 'code' in error) return 'error.marking';
+  return '发生了意外错误，请重试。';
 }
 export function bytes(size: number) {
   if (!size) return '0 B';
   const unit = Math.min(Math.floor(Math.log(size) / Math.log(1024)), 4);
-  return `${(size / 1024 ** unit).toLocaleString('zh-CN', { maximumFractionDigits: unit ? 1 : 0 })} ${['B', 'KiB', 'MiB', 'GiB', 'TiB'][unit]}`;
+  return `${(size / 1024 ** unit).toLocaleString(getLocale(), { maximumFractionDigits: unit ? 1 : 0 })} ${['B', 'KiB', 'MiB', 'GiB', 'TiB'][unit]}`;
 }
 export function date(value: string | null | undefined, time = false) {
   if (!value) return '—';
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return '—';
-  return new Intl.DateTimeFormat('zh-CN', {
+  return new Intl.DateTimeFormat(getLocale(), {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -163,7 +176,7 @@ export async function passwordKey(password: string, salt: string) {
     ['deriveBits'],
   );
   const result = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', hash: 'SHA-256', iterations: 600_000, salt: unbase64url(salt) },
+    { name: 'PBKDF2', hash: 'SHA-256', iterations: 600000, salt: unbase64url(salt) },
     key,
     256,
   );

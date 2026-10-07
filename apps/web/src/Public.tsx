@@ -1,3 +1,4 @@
+import { t } from './i18n';
 import { useEffect, useState } from 'react';
 import {
   ArrowDownToLine,
@@ -67,9 +68,10 @@ export function PublicLibrary({
     setBusy(file.id);
     setError('');
     try {
-      const result = await post<{ url: string; fileName: string }>(
-        `/api/files/${file.id}/downloads`,
-      );
+      const result = await post<{
+        url: string;
+        fileName: string;
+      }>(`/api/files/${file.id}/downloads`);
       downloadUrl(result.url, result.fileName);
     } catch (error) {
       setError(message(error));
@@ -91,30 +93,35 @@ export function PublicLibrary({
         <Brand compact={stealthMode} name={name} />
         <button className="button button-quiet" onClick={() => void logout()}>
           <LogOut size={16} />
-          退出
+          {t('退出')}
         </button>
       </header>
       <main className="public-main">
         <section className="public-intro">
           <div>
-            {!stealthMode && <span className="eyebrow">YOUR PERSONAL LIBRARY</span>}
+            {!stealthMode && <span className="eyebrow">{t('YOUR PERSONAL LIBRARY')}</span>}
             <h1>{name}</h1>
             <p>
-              你好，<strong>{session.user.userId}</strong>。你的文件已准备就绪。
+              {t('你好，')}
+              <strong>{session.user.userId}</strong>
+              {t('。你的文件已准备就绪。')}
             </p>
           </div>
           {!stealthMode && (
             <div className="recipient-seal">
               <ShieldCheck size={23} />
               <span>
-                专属访问<small>{session.key.name}</small>
+                {t('专属访问')}
+                <small>{session.key.name}</small>
               </span>
             </div>
           )}
         </section>
         <div className="library-top">
           <Breadcrumbs folders={library?.breadcrumbs ?? []} onChange={navigate} />
-          <span className="muted small">{library ? `${library.total} 个文件` : ''}</span>
+          <span className="muted small">
+            {library ? t('{{value0}} 个文件', { value0: library.total }) : ''}
+          </span>
         </div>
         <Alert>{error}</Alert>
         {!library && !error ? (
@@ -156,16 +163,16 @@ export function PublicLibrary({
                       </div>
                       <button
                         className="button button-secondary"
-                        aria-label={`${stealthMode ? '下载' : '领取'} ${file.name}`}
+                        aria-label={`${stealthMode ? t('下载') : t('领取')} ${file.name}`}
                         disabled={busy === file.id}
                         onClick={() => void download(file)}
                       >
                         {busy === file.id ? (
-                          <Spinner label="准备中" />
+                          <Spinner label={t('准备中')} />
                         ) : (
                           <>
                             <ArrowDownToLine size={17} />
-                            <span>{stealthMode ? '下载' : '领取文件'}</span>
+                            <span>{stealthMode ? t('下载') : t('领取文件')}</span>
                           </>
                         )}
                       </button>
@@ -174,9 +181,11 @@ export function PublicLibrary({
                 </div>
               ) : (
                 <Empty
-                  title={library.folders.length ? '此文件夹下没有文件' : '暂时没有可领取的文件'}
+                  title={
+                    library.folders.length ? t('此文件夹下没有文件') : t('暂时没有可领取的文件')
+                  }
                 >
-                  文件准备好后会出现在这里。
+                  {t('文件准备好后会出现在这里。')}
                 </Empty>
               )}
               <Pagination
@@ -191,14 +200,14 @@ export function PublicLibrary({
         {!stealthMode && (
           <p className="delivery-note">
             <ShieldCheck size={17} />
-            下载文件将写入与你的领取记录关联的专属标记。
+            {t('下载文件将写入与你的领取记录关联的专属标记。')}
           </p>
         )}
       </main>
       {!stealthMode && (
         <footer className="site-footer">
           <span>{name}</span>
-          <span>一份文件，一枚印记。</span>
+          <span>{t('一份文件，一枚印记。')}</span>
         </footer>
       )}
     </div>

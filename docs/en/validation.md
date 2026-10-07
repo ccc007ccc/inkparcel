@@ -2,14 +2,14 @@
 
 # Validation status
 
-This page records v0.1 local and remote functional acceptance on 2026-10-07.
+This page records v0.1 local and remote functional acceptance through 2026-10-08.
 These results do not establish Cloudflare Free CPU acceptance.
 
 ## Local acceptance
 
 - `pnpm check` passes formatting, relative documentation links/anchors, all TypeScript
-  checks, 59 package tests and the Vite/Worker production build with deployment dry run.
-  The package split is 29 binary, 17 Worker integration and 13 browser-logic tests.
+  checks, 62 package tests and the Vite/Worker production build with deployment dry run.
+  The package split is 29 binary, 17 Worker integration and 16 browser-logic tests.
 - Worker integration uses actual local Workerd with D1 migrations and R2 bindings:
   protected/concurrent setup, old-path 404, HTTPS/Origin enforcement, password/session
   invalidation, cross-key isolation, user controls, folders, 100-key bulk ACL updates,
@@ -56,6 +56,15 @@ Icon retrieval preserves bytes; replacement uses a new URL and one database row;
 reset returns the built-in icon. Browser checks confirm header/tab icon updates and
 reset, with no fixed InkParcel branding after a custom site name is saved. The 390 px
 minimal login and library screenshots were visually inspected.
+
+On 2026-10-08, the icon/i18n batch passed 62 package tests, type checking, the
+production build/dry run and Chromium workflows. Translation resources have equal
+key and interpolation coverage. Browser checks cover English errors, language
+persistence after reload, translated admin navigation/confirmations, unchanged
+user data and form drafts across dialog language changes, and locale-aware HTML.
+Custom icons replace the old wrapper with no background or rotation; clearing an
+icon restores the original black emblem and empty settings state. Mobile layouts
+and the English retrieval page were visually inspected.
 
 ## Continuous integration
 

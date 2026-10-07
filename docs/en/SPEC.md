@@ -150,7 +150,7 @@ The byte-level format and fingerprint algorithm are defined in [APK format](apk-
 
 ## User interface
 
-- Responsive Chinese-first UI with consistent English project terminology. Public
+- Responsive Chinese/English UI, defaulting to Simplified Chinese. Public
   page: user ID/code login, folder breadcrumbs, authorized files, sizes and downloads.
 - Admin: setup/login, file library (folders, uploads, multi-key ACL, rename/delete),
   keys/codes, users/notes/blocking, filtered issuance records, local trace, settings.
@@ -173,6 +173,13 @@ admin page immediately. A custom PNG icon appears in brand headers and the brows
 tab, can be reset, and is stored as a single bounded D1 blob. No third-party image
 host is required. HTML titles escape user-provided text. Initial/loading metadata
 stays neutral while configuration is loading; stealth mode hides promotional text.
+
+UI localization uses i18next resources for labels, hints, statuses, dialogs, clipboard
+text and stable API-error codes. Locale defaults to Simplified Chinese and is stored
+per browser, with an English option. Switching preserves forms and authentication;
+user-defined names and identifiers are never translated. Intl formats dates and
+numbers for the selected language. A preference cookie localizes initial HTML without
+changing authorization. Locale controls are available inside dialogs as well.
 
 ## Acceptance gates
 

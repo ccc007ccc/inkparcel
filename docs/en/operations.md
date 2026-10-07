@@ -58,9 +58,16 @@ Saving the site name updates public and administrative branding, footers and pag
 titles; the current admin page refreshes its branding immediately. In site settings,
 upload a PNG icon (up to 256 KiB, at most 1024×1024 pixels; square recommended).
 Uploading applies immediately, separately from saving the settings form. The same
-icon appears in headers and browser tabs; Reset restores the built-in icon. Other
+icon appears in headers and browser tabs; Clear removes the uploaded image and restores the original black emblem. A custom image replaces the emblem entirely, with no wrapper background or border. Other
 open pages pick up changes on reload. Icons are included in D1 backups. Apply
 `0004_site_icon.sql` before deploying this functionality.
+
+## Interface language
+
+Use the language selector to switch between Simplified Chinese and English. Chinese
+is the default; each browser remembers its selection. Dialogs include a selector too,
+so unfinished forms can be retained. Site names, user IDs, file names and key names
+remain exactly as configured. Language does not change permissions or APK markers.
 
 ## Administrator access
 

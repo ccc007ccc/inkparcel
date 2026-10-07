@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { getCookie } from 'hono/cookie';
 import { admin } from './admin';
 import { iconUrl } from './site-icon';
 import { cleanup } from './cleanup';
@@ -82,10 +83,30 @@ app.all('*', async (c) => {
     url.search = '';
     const result = await c.env.ASSETS.fetch(new Request(url, { method: c.req.method }));
     if (result.status !== 200) fail(503, 'assets_unavailable', '网页资源尚未构建');
+    const locale = getCookie(c, 'inkparcel_language') === 'en' ? 'en' : 'zh-CN';
     const siteName = current?.site_name || 'InkParcel';
     const title =
-      current?.stealth_mode && path === '/' && siteName === 'InkParcel' ? '文件分享' : siteName;
+      current?.stealth_mode && path === '/' && siteName === 'InkParcel'
+        ? locale === 'en'
+          ? 'File sharing'
+          : '文件分享'
+        : siteName;
     const rendered = new HTMLRewriter()
+      .on('html', {
+        element(element) {
+          element.setAttribute('lang', locale);
+        },
+      })
+      .on('meta[name="description"]', {
+        element(element) {
+          element.setAttribute(
+            'content',
+            locale === 'en'
+              ? 'Enter your access details to browse and download files.'
+              : '输入提取信息，浏览和下载文件。',
+          );
+        },
+      })
       .on('title', {
         element(element) {
           element.setInnerContent(title);

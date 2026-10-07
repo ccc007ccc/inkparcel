@@ -10,7 +10,7 @@
 
 | 方法 / 路径         | 请求                                                  | 响应                                                                             |
 | ------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------- |
-| GET `/api/site`     | —                                                     | `{name, initialized, stealthMode, iconUrl}`                                      |
+| GET `/api/site`     | —                                                     | `{name, initialized, stealthMode, iconUrl, hasCustomIcon}`                       |
 | GET `/api/setup`    | —                                                     | 初始化前返回 `{available:true}`，之后为 404                                      |
 | POST `/api/setup`   | `{bootstrapToken,passwordKey,passwordSalt,adminPath}` | `{adminPath}` 与管理员 Cookie                                                    |
 | GET `A/api/auth`    | —                                                     | `{authenticated,passwordSalt,kdf:{algorithm:"PBKDF2-SHA256",iterations:600000}}` |
@@ -134,3 +134,7 @@ APK 描述符为 `id="apk"`、`version="apk-v1"`、`extensions=[".apk"]`。预�
 `stealthMode` 为布尔设置，默认 false，只能通过管理员设置接口修改；`/api/site` 返回它供前端选择公开页面样式。PATCH 省略时保留原值。该设置仅改变页面呈现，不改变认证、标记、下载或溯源。
 
 `siteName` 统一用于页面中的站点名称与网页标题，`iconUrl` 为同源公开图标地址。`PUT A/api/site-icon` 接受原始 `image/png` 字节，最大 256 KiB、宽高各 1–1024 像素，检查 PNG 签名、头部和结尾结构；浏览器还验证图片可解码。`DELETE A/api/site-icon` 恢复内置图标。两者均要求管理员认证与同源 Origin，返回 `{iconUrl,hasCustomIcon}`。`GET/HEAD /api/site-icon` 返回 PNG 或内置 SVG，设置 nosniff 与 no-store。替换时原子更新版本化 URL 与 D1 单行图标数据。
+
+公开字段 `hasCustomIcon` 区分已上传图标与原黑色徽标。自定义图片完整替换徽标，不再套入背景容器；清除后该字段恢复为 false。
+
+API 错误码保持稳定且与语言无关，浏览器按错误码显示本地化文案，诊断响应消息与界面翻译分开处理。语言偏好 Cookie `inkparcel_language`（`zh-CN` 或 `en`）只控制初始 HTML 语言和通用标题/描述，不参与授权。切换浏览器语言无需数据库迁移或修改站点设置。

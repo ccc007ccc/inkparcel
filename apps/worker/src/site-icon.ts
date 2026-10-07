@@ -52,4 +52,4 @@ export async function readIcon(c: Ctx): Promise<Uint8Array> {
   return bytes;
 }
 export const defaultIcon =
-  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="#506844"/><path d="M10 6h8l5 5v15H10z" fill="none" stroke="#fff" stroke-width="2"/><path d="M18 6v6h5M13 17h7M13 21h7" fill="none" stroke="#fff" stroke-width="2"/></svg>';
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="M8 1h16a7 7 0 0 1 7 7v16a7 7 0 0 1-7 7H1V8a7 7 0 0 1 7-7" fill="#262e2b"/><g transform="translate(5 5) scale(.92)" fill="none" stroke="#f7f6f2" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m7.5 4.27 9 5.15M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></g></svg>';

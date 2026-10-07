@@ -137,6 +137,24 @@ test('admin setup, multi-key upload, personal download and local trace', async (
     path: resolve(screenshotDir, 'simple-access-mobile.png'),
     fullPage: true,
   });
+  await simplePage.getByLabel('语言 / Language', { exact: true }).selectOption('en');
+  await expect(
+    simplePage.getByRole('heading', { name: 'Retrieve files', exact: true }),
+  ).toBeVisible();
+  await simplePage.reload();
+  await expect(simplePage.locator('html')).toHaveAttribute('lang', 'en');
+  await expect(simplePage).toHaveTitle('File sharing');
+  await simplePage.screenshot({
+    path: resolve(screenshotDir, 'access-english-mobile.png'),
+    fullPage: true,
+    animations: 'disabled',
+  });
+  await simplePage.getByLabel(/^User ID/).fill('tester@example.test');
+  await simplePage.getByLabel('Access code', { exact: true }).fill('invalid-code');
+  await simplePage.getByRole('button', { name: 'Retrieve files', exact: true }).click();
+  await expect(simplePage.getByRole('alert')).toHaveText('Incorrect user ID or access code');
+  await simplePage.getByLabel('语言 / Language', { exact: true }).selectOption('zh-CN');
+  await expect(simplePage.getByRole('alert')).toHaveText('用户 ID 或提取码错误');
   await simplePage.getByLabel(/^用户 ID/).fill('tester@example.test');
   await simplePage.getByLabel('提取码', { exact: true }).fill(code);
   await simplePage.getByRole('button', { name: '提取文件', exact: true }).click();
@@ -321,7 +339,30 @@ test('admin setup, multi-key upload, personal download and local trace', async (
   await page
     .getByLabel('上传网站图标', { exact: true })
     .setInputFiles(resolve('tests/fixtures/site-icon.png'));
-  await expect(page.getByRole('button', { name: '恢复默认图标', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '清除图标', exact: true })).toBeVisible();
+  await expect(page.locator('.sidebar .brand-custom-icon')).toBeVisible();
+  await expect(page.locator('.sidebar .brand-symbol')).toHaveCount(0);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect
+    .poll(() =>
+      page.locator('.sidebar').evaluate((element) => element.getBoundingClientRect().right),
+    )
+    .toBeLessThanOrEqual(0);
+  const customIcon = page.locator('.mobile-header .brand-custom-icon');
+  await expect(customIcon).toBeVisible();
+  const appearance = await customIcon.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      background: style.backgroundColor,
+      transform: style.transform,
+      width: element.getBoundingClientRect().width,
+    };
+  });
+  expect(appearance.background).toBe('rgba(0, 0, 0, 0)');
+  expect(appearance.transform).toBe('none');
+  expect(appearance.width).toBe(34);
+  await page.screenshot({ path: resolve(screenshotDir, 'custom-icon-mobile.png'), fullPage: true });
+  await page.setViewportSize({ width: 1280, height: 900 });
   const iconHref = await page.locator('link[rel="icon"]').getAttribute('href');
   expect(iconHref).toContain('/api/site-icon?v=');
   const iconResponse = await page.request.get(iconHref!);
@@ -333,9 +374,20 @@ test('admin setup, multi-key upload, personal download and local trace', async (
   await expect(publicPage).toHaveTitle('示例文件站');
   await expect(publicPage.locator('body')).not.toContainText('InkParcel');
   await expect(publicPage.locator('.brand img').first()).toHaveAttribute('src', iconHref!);
-  await page.getByRole('button', { name: '恢复默认图标', exact: true }).click();
-  await expect(page.getByRole('button', { name: '恢复默认图标', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: '清除图标', exact: true }).click();
+  await expect(page.getByRole('button', { name: '清除图标', exact: true })).toHaveCount(0);
   await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href', '/api/site-icon');
+  await expect(page.locator('.sidebar .brand-custom-icon')).toHaveCount(0);
+  await expect(page.locator('.sidebar .brand-symbol svg')).toBeVisible();
+  await expect(page.getByText('未设置自定义图标', { exact: true })).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({
+    path: resolve(screenshotDir, 'cleared-icon-mobile.png'),
+    fullPage: true,
+    animations: 'disabled',
+  });
+  await page.setViewportSize({ width: 1280, height: 900 });
+
   expect((await page.request.get(adminPath)).status()).toBe(404);
   expect((await page.request.get(`${adminPath}/api/keys`)).status()).toBe(404);
   await page.getByLabel('当前密码', { exact: true }).fill(password);
@@ -367,6 +419,33 @@ test('admin setup, multi-key upload, personal download and local trace', async (
   await page.locator('input[type=file]').setInputFiles(downloadedPath);
   await expect(page.getByText('tester@example.test', { exact: true }).first()).toBeVisible();
   await expect(page.getByText(/文件内容.*一致/).first()).toBeVisible();
+  await page.getByLabel('语言 / Language', { exact: true }).selectOption('en');
+  await expect(page.getByRole('heading', { name: 'Trace a file', exact: true })).toBeVisible();
+  await expect(
+    page.getByText('File content matches the issued version', { exact: true }),
+  ).toBeVisible();
+  await expect(page).toHaveTitle('示例文件站');
+  await page.getByRole('link', { name: 'Site settings', exact: true }).click();
+  await expect(page.getByLabel('Site name', { exact: true })).toHaveValue('示例文件站');
+  await page.screenshot({
+    path: resolve(screenshotDir, 'settings-english.png'),
+    fullPage: true,
+    animations: 'disabled',
+  });
+  await page.getByRole('link', { name: 'Keys and access codes', exact: true }).click();
+  page.once('dialog', async (dialog) => {
+    expect(dialog.message()).toContain('Disable');
+    await dialog.dismiss();
+  });
+  await page.getByRole('button', { name: 'Disable Partners', exact: true }).click();
+  await page.getByRole('button', { name: 'Rename Partners', exact: true }).click();
+  await page.getByLabel('Key name', { exact: true }).fill('Draft 中文');
+  await page
+    .getByRole('dialog')
+    .getByLabel('语言 / Language', { exact: true })
+    .selectOption('zh-CN');
+  await expect(page.getByLabel('密钥名称', { exact: true })).toHaveValue('Draft 中文');
+  await page.getByRole('button', { name: '关闭对话框', exact: true }).click();
   expect(failures).toEqual([]);
   await mobile.close();
   await recipient.close();

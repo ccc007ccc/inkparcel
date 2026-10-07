@@ -1,3 +1,5 @@
+import { LanguageSwitcher } from './LanguageSwitcher';
+import { t } from './i18n';
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import {
   ArrowLeft,
@@ -7,6 +9,7 @@ import {
   Clipboard,
   FolderOpen,
   LoaderCircle,
+  Package,
   Search,
   X,
 } from 'lucide-react';
@@ -16,17 +19,21 @@ export function Brand({ compact = false, name }: { compact?: boolean; name?: str
   const site = useSite();
   return (
     <div className="brand">
-      <span className="brand-symbol">
-        <img src={site.iconUrl} alt="" width={24} height={24} />
-      </span>
+      {site.hasCustomIcon ? (
+        <img className="brand-custom-icon" src={site.iconUrl} alt="" width={41} height={41} />
+      ) : (
+        <span className="brand-symbol" aria-hidden="true">
+          <Package size={21} strokeWidth={1.6} />
+        </span>
+      )}
       <span>
         {name ?? site.name}
-        {!compact && <small>每一份，都有来处</small>}
+        {!compact && <small>{t('每一份，都有来处')}</small>}
       </span>
     </div>
   );
 }
-export function Spinner({ label = '正在载入…' }: { label?: string }) {
+export function Spinner({ label = t('正在载入…') }: { label?: string }) {
   return (
     <span className="spinner" role="status">
       <LoaderCircle size={17} className="spin" />
@@ -43,7 +50,7 @@ export function Alert({
 }) {
   return children ? (
     <div className={`alert alert-${kind}`} role={kind === 'error' ? 'alert' : 'status'}>
-      {children}
+      {typeof children === 'string' ? t(children) : children}
     </div>
   ) : null;
 }
@@ -140,10 +147,11 @@ export function Modal({
     >
       <div className="modal-header">
         <h2 id={titleId}>{title}</h2>
-        <button className="icon-button" aria-label="关闭对话框" onClick={onClose}>
+        <button className="icon-button" aria-label={t('关闭对话框')} onClick={onClose}>
           <X size={20} />
         </button>
       </div>
+      <LanguageSwitcher inline />
       {children}
     </dialog>
   );
@@ -152,7 +160,7 @@ export function KeyPicker({
   keys,
   value,
   onChange,
-  label = '允许访问的密钥',
+  label = t('允许访问的密钥'),
 }: {
   keys: Key[];
   value: string[];
@@ -162,7 +170,7 @@ export function KeyPicker({
   return (
     <fieldset className="key-picker">
       <legend>{label}</legend>
-      <p className="muted small">可多选。不选择时，仅管理员可见。</p>
+      <p className="muted small">{t('可多选。不选择时，仅管理员可见。')}</p>
       {keys.length ? (
         <div className="key-options">
           {keys.map((key) => (
@@ -180,14 +188,14 @@ export function KeyPicker({
                 {key.name}
                 <small>
                   {key.code}
-                  {!key.enabled && ' · 已停用'}
+                  {!key.enabled && t(' · 已停用')}
                 </small>
               </span>
             </label>
           ))}
         </div>
       ) : (
-        <p className="muted small">还没有密钥，可稍后在文件设置中分配。</p>
+        <p className="muted small">{t('还没有密钥，可稍后在文件设置中分配。')}</p>
       )}
     </fieldset>
   );
@@ -200,8 +208,8 @@ export function Breadcrumbs({
   onChange: (id: string | null) => void;
 }) {
   return (
-    <nav className="breadcrumbs" aria-label="文件夹路径">
-      <button onClick={() => onChange(null)}>全部文件</button>
+    <nav className="breadcrumbs" aria-label={t('文件夹路径')}>
+      <button onClick={() => onChange(null)}>{t('全部文件')}</button>
       {folders.map((folder) => (
         <span key={folder.id}>
           <ChevronRight size={14} />
@@ -225,12 +233,12 @@ export function Pagination({
   const count = Math.max(1, Math.ceil(total / pageSize));
   return (
     <div className="pagination">
-      <span>共 {total} 项</span>
+      <span>{t('pagination.summary', { count: total })}</span>
       {count > 1 && (
         <div>
           <button
             className="icon-button"
-            aria-label="上一页"
+            aria-label={t('上一页')}
             disabled={page <= 1}
             onClick={() => onChange(page - 1)}
           >
@@ -241,7 +249,7 @@ export function Pagination({
           </span>
           <button
             className="icon-button"
-            aria-label="下一页"
+            aria-label={t('下一页')}
             disabled={page >= count}
             onClick={() => onChange(page + 1)}
           >
@@ -255,7 +263,7 @@ export function Pagination({
 export function SearchBox({
   value,
   onChange,
-  placeholder = '搜索…',
+  placeholder = t('搜索…'),
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -277,12 +285,12 @@ export function SearchBox({
         onChange={(event) => setDraft(event.target.value)}
       />
       <button className="text-button" type="submit">
-        搜索
+        {t('搜索')}
       </button>
     </form>
   );
 }
-export function CopyButton({ value, label = '复制' }: { value: string; label?: string }) {
+export function CopyButton({ value, label = t('复制') }: { value: string; label?: string }) {
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState(false);
   useEffect(() => {
@@ -305,14 +313,14 @@ export function CopyButton({ value, label = '复制' }: { value: string; label?:
       }}
     >
       {copied ? <Check size={16} /> : <Clipboard size={16} />}
-      {error ? '请手动选取复制' : copied ? '已复制' : label}
+      {error ? t('请手动选取复制') : copied ? t('已复制') : label}
     </button>
   );
 }
 export function StatusBadge({
   active,
-  on = '启用',
-  off = '停用',
+  on = t('启用'),
+  off = t('停用'),
 }: {
   active: boolean;
   on?: string;

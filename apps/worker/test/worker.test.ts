@@ -886,6 +886,9 @@ describe('stealth presentation setting', () => {
     expect((await call(`${A}/api/settings`, 'PATCH', { stealthMode: true }, cookie)).status).toBe(
       200,
     );
+    const englishPage = await (await call('/', 'GET', undefined, 'inkparcel_language=en')).text();
+    expect(englishPage).toContain('lang="en"');
+    expect(englishPage).toContain('<title>File sharing</title>');
     await call(`${A}/api/settings`, 'PATCH', { siteName: 'Files' }, cookie);
     expect((await json(await call('/api/site'))).stealthMode).toBe(true);
     expect(
@@ -949,6 +952,7 @@ describe('site branding and icons', () => {
     expect((await put(oversized, cookie)).status).toBe(400);
     const first = await json(await put(png, cookie));
     expect(first.hasCustomIcon).toBe(true);
+    expect((await json(await call('/api/site'))).hasCustomIcon).toBe(true);
     const icon = await call(first.iconUrl);
     expect(icon.headers.get('Content-Type')).toBe('image/png');
     expect(icon.headers.get('X-Content-Type-Options')).toBe('nosniff');
@@ -966,5 +970,6 @@ describe('site branding and icons', () => {
       (await json(await call(`${A}/api/settings`, 'GET', undefined, cookie))).hasCustomIcon,
     ).toBe(false);
     expect((await call('/api/site-icon')).headers.get('Content-Type')).toBe('image/svg+xml');
+    expect((await json(await call('/api/site'))).hasCustomIcon).toBe(false);
   });
 });

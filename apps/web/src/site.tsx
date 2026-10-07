@@ -4,12 +4,14 @@ export interface SiteInfo {
   initialized: boolean;
   stealthMode: boolean;
   iconUrl: string;
+  hasCustomIcon: boolean;
 }
 export const SiteContext = createContext<SiteInfo & { refresh: () => Promise<void> }>({
-  name: '文件分享',
+  name: 'InkParcel',
   initialized: false,
   stealthMode: false,
   iconUrl: '/api/site-icon',
+  hasCustomIcon: false,
   refresh: async () => {},
 });
 export const useSite = () => useContext(SiteContext);

@@ -2179,10 +2179,25 @@ progress::-moz-progress-bar {
   margin: auto;
 }
 
-.brand-symbol img,
+.brand-custom-icon {
+  display: block;
+  width: 41px;
+  height: 41px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
 .site-icon-settings img {
   object-fit: contain;
-  border-radius: 5px;
+}
+@media (max-width: 600px) {
+  .brand-custom-icon {
+    width: 36px;
+    height: 36px;
+  }
+  .mobile-header .brand-custom-icon {
+    width: 34px;
+    height: 34px;
+  }
 }
 .site-icon-settings {
   display: flex;
@@ -2198,4 +2213,39 @@ progress::-moz-progress-bar {
 .brand > span:last-child {
   overflow-wrap: anywhere;
   min-width: 0;
+}
+
+.language-switcher {
+  position: fixed;
+  right: 16px;
+  bottom: 12px;
+  z-index: 60;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 5px 9px;
+  font-size: 12px;
+}
+.language-switcher label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.language-switcher select {
+  width: auto;
+  min-height: 30px;
+  padding: 3px 6px;
+  font-size: 12px;
+}
+body {
+  padding-bottom: 58px;
+}
+
+.language-switcher.language-inline {
+  position: static;
+  margin-bottom: 14px;
+  width: fit-content;
+}
+body:has(dialog[open]) .language-switcher:not(.language-inline) {
+  visibility: hidden;
 }

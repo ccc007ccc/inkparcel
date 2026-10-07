@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { useEffect, useState, type FormEvent } from 'react';
 import {
   FileBox,
@@ -60,11 +61,17 @@ export function FileLibrary({ base }: AdminProps) {
     setError('');
     setFiles(undefined);
     void Promise.all([
-      api<{ items: Folder[] }>(`${base}/api/folders`),
-      api<{ items: Key[] }>(`${base}/api/keys`),
-      api<{ files: AdminFile[]; total: number; pageSize: number }>(
-        `${base}/api/files${query({ folderId, page, q: search })}`,
-      ),
+      api<{
+        items: Folder[];
+      }>(`${base}/api/folders`),
+      api<{
+        items: Key[];
+      }>(`${base}/api/keys`),
+      api<{
+        files: AdminFile[];
+        total: number;
+        pageSize: number;
+      }>(`${base}/api/files${query({ folderId, page, q: search })}`),
     ])
       .then(([folders, keys, files]) => {
         if (!live) return;
@@ -87,7 +94,12 @@ export function FileLibrary({ base }: AdminProps) {
     setSearch('');
   }
   async function deleteFile(file: AdminFile) {
-    if (!confirm(`删除“${file.name}”？文件将无法下载，历史领取与溯源记录会保留。`)) return;
+    if (
+      !confirm(
+        t('删除“{{value0}}”？文件将无法下载，历史领取与溯源记录会保留。', { value0: file.name }),
+      )
+    )
+      return;
     try {
       await remove(`${base}/api/files/${file.id}`);
       refresh();
@@ -96,7 +108,8 @@ export function FileLibrary({ base }: AdminProps) {
     }
   }
   async function deleteFolder(folder: Folder) {
-    if (!confirm(`删除文件夹“${folder.name}”？只有空文件夹可以删除。`)) return;
+    if (!confirm(t('删除文件夹“{{value0}}”？只有空文件夹可以删除。', { value0: folder.name })))
+      return;
     try {
       await remove(`${base}/api/folders/${folder.id}`);
       refresh();
@@ -111,22 +124,22 @@ export function FileLibrary({ base }: AdminProps) {
   return (
     <>
       <PageHeading
-        eyebrow="THE LIBRARY"
-        title="文件库"
+        eyebrow={t('THE LIBRARY')}
+        title={t('文件库')}
         action={
           <>
             <button className="button button-secondary" onClick={() => setFolderModal('new')}>
               <FolderPlus size={17} />
-              新建文件夹
+              {t('新建文件夹')}
             </button>
             <button className="button button-primary" onClick={() => setUploading(true)}>
               <Upload size={17} />
-              上传文件
+              {t('上传文件')}
             </button>
           </>
         }
       >
-        整理每一份交付，为文件选择可见的密钥。
+        {t('整理每一份交付，为文件选择可见的密钥。')}
       </PageHeading>
       <div className="library-toolbar">
         <Breadcrumbs folders={folderTrail(folders, folderId)} onChange={navigate} />
@@ -136,7 +149,7 @@ export function FileLibrary({ base }: AdminProps) {
             setSearch(value);
             setPage(1);
           }}
-          placeholder="搜索全部文件"
+          placeholder={t('搜索全部文件')}
         />
       </div>
       <Alert>{error}</Alert>
@@ -149,12 +162,12 @@ export function FileLibrary({ base }: AdminProps) {
           <table className="file-table">
             <thead>
               <tr>
-                <th>名称</th>
-                <th>可见范围</th>
-                <th>大小</th>
-                <th>上传时间</th>
+                <th>{t('名称')}</th>
+                <th>{t('可见范围')}</th>
+                <th>{t('大小')}</th>
+                <th>{t('上传时间')}</th>
                 <th>
-                  <span className="sr-only">操作</span>
+                  <span className="sr-only">{t('操作')}</span>
                 </th>
               </tr>
             </thead>
@@ -169,23 +182,23 @@ export function FileLibrary({ base }: AdminProps) {
                       <strong>{folder.name}</strong>
                     </button>
                   </td>
-                  <td className="muted">文件夹</td>
+                  <td className="muted">{t('文件夹')}</td>
                   <td className="muted">—</td>
                   <td className="muted">—</td>
                   <td>
                     <div className="row-actions">
                       <button
                         className="icon-button"
-                        aria-label={`编辑文件夹 ${folder.name}`}
-                        title="编辑 / 移动文件夹"
+                        aria-label={t('编辑文件夹 {{value0}}', { value0: folder.name })}
+                        title={t('编辑 / 移动文件夹')}
                         onClick={() => setFolderModal(folder)}
                       >
                         <Pencil size={16} />
                       </button>
                       <button
                         className="icon-button"
-                        aria-label={`删除文件夹 ${folder.name}`}
-                        title="删除空文件夹"
+                        aria-label={t('删除文件夹 {{value0}}', { value0: folder.name })}
+                        title={t('删除空文件夹')}
                         onClick={() => void deleteFolder(folder)}
                       >
                         <Trash2 size={16} />
@@ -207,9 +220,9 @@ export function FileLibrary({ base }: AdminProps) {
                           <small>
                             {(
                               {
-                                pending: '待完成上传',
-                                failed: '校验失败',
-                                deleted: '已删除',
+                                pending: t('待完成上传'),
+                                failed: t('校验失败'),
+                                deleted: t('已删除'),
                               } as Record<string, string>
                             )[file.status] ?? file.status}
                           </small>
@@ -229,7 +242,7 @@ export function FileLibrary({ base }: AdminProps) {
                       <div className="acl-tags">
                         {file.keyIds.slice(0, 2).map((id) => (
                           <span className="tag" key={id}>
-                            {keys.find((key) => key.id === id)?.name ?? '已归档密钥'}
+                            {keys.find((key) => key.id === id)?.name ?? t('已归档密钥')}
                           </span>
                         ))}
                         {file.keyIds.length > 2 && (
@@ -239,7 +252,7 @@ export function FileLibrary({ base }: AdminProps) {
                     ) : (
                       <span className="admin-only">
                         <LockKeyhole size={13} />
-                        仅管理员
+                        {t('仅管理员')}
                       </span>
                     )}
                   </td>
@@ -250,8 +263,8 @@ export function FileLibrary({ base }: AdminProps) {
                       {file.status === 'pending' && (
                         <button
                           className="icon-button"
-                          aria-label={`继续上传 ${file.name}`}
-                          title="继续上传"
+                          aria-label={t('继续上传 {{value0}}', { value0: file.name })}
+                          title={t('继续上传')}
                           onClick={() => {
                             setResumeFile(file);
                             setUploading(true);
@@ -262,16 +275,16 @@ export function FileLibrary({ base }: AdminProps) {
                       )}
                       <button
                         className="icon-button"
-                        aria-label={`编辑 ${file.name}`}
-                        title="编辑 / 权限 / 移动"
+                        aria-label={t('编辑 {{value0}}', { value0: file.name })}
+                        title={t('编辑 / 权限 / 移动')}
                         onClick={() => setEditFile(file)}
                       >
                         <Pencil size={16} />
                       </button>
                       <button
                         className="icon-button"
-                        aria-label={`删除 ${file.name}`}
-                        title="删除文件"
+                        aria-label={t('删除 {{value0}}', { value0: file.name })}
+                        title={t('删除文件')}
                         onClick={() => void deleteFile(file)}
                       >
                         <Trash2 size={16} />
@@ -283,14 +296,16 @@ export function FileLibrary({ base }: AdminProps) {
             </tbody>
           </table>
           {files?.length === 0 && visibleFolders.length === 0 && (
-            <Empty title={search ? '没有找到匹配的文件' : '这里还是一张白纸'}>
-              {search ? '换个关键词试试。' : '上传第一个 APK，开始一次可验证的交付。'}
+            <Empty title={search ? t('没有找到匹配的文件') : t('这里还是一张白纸')}>
+              {search ? t('换个关键词试试。') : t('上传第一个 APK，开始一次可验证的交付。')}
             </Empty>
           )}
         </div>
       )}
       <Pagination total={total} page={page} pageSize={pageSize} onChange={setPage} />
-      <p className="muted small library-footnote">文件夹用于整理。移动文件不会改变它的可见范围。</p>
+      <p className="muted small library-footnote">
+        {t('文件夹用于整理。移动文件不会改变它的可见范围。')}
+      </p>
       {uploading && (
         <UploadModal
           base={base}
@@ -348,7 +363,7 @@ function FolderSelect({
   const hidden = exclude ? descendants(folders, exclude) : new Set<string>();
   return (
     <select value={value ?? ''} onChange={(event) => onChange(event.target.value || null)}>
-      <option value="">全部文件（根目录）</option>
+      <option value="">{t('全部文件（根目录）')}</option>
       {folders
         .filter((folder) => !hidden.has(folder.id))
         .map((folder) => (
@@ -397,30 +412,35 @@ function FolderForm({
     }
   }
   return (
-    <Modal title={item ? '编辑文件夹' : '新建文件夹'} onClose={onClose}>
+    <Modal title={item ? t('编辑文件夹') : t('新建文件夹')} onClose={onClose}>
       <form className="stack" onSubmit={submit}>
-        <Field label="文件夹名称">
+        <Field label={t('文件夹名称')}>
           <input
             autoFocus
             required
             maxLength={160}
             value={name}
             onChange={(event) => setName(event.target.value)}
-            placeholder="例如：发行版本"
+            placeholder={t('例如：发行版本')}
           />
         </Field>
-        <Field label="所在位置">
+        <Field label={t('所在位置')}>
           <FolderSelect folders={folders} value={parent} onChange={setParent} exclude={item?.id} />
         </Field>
-        <KeyPicker keys={keys} value={keyIds} onChange={setKeyIds} label="新上传文件的默认密钥" />
-        <p className="muted small">只作为上传时的预选项，不影响已有文件。</p>
+        <KeyPicker
+          keys={keys}
+          value={keyIds}
+          onChange={setKeyIds}
+          label={t('新上传文件的默认密钥')}
+        />
+        <p className="muted small">{t('只作为上传时的预选项，不影响已有文件。')}</p>
         <Alert>{error}</Alert>
         <div className="modal-actions">
           <button type="button" className="button button-secondary" onClick={onClose}>
-            取消
+            {t('取消')}
           </button>
           <button className="button button-primary" disabled={busy}>
-            {busy ? <Spinner label="保存中" /> : '保存文件夹'}
+            {busy ? <Spinner label={t('保存中')} /> : t('保存文件夹')}
           </button>
         </div>
       </form>
@@ -459,9 +479,9 @@ function FileForm({
     }
   }
   return (
-    <Modal title="文件设置" onClose={onClose}>
+    <Modal title={t('文件设置')} onClose={onClose}>
       <form className="stack" onSubmit={submit}>
-        <Field label="显示名称">
+        <Field label={t('显示名称')}>
           <input
             autoFocus
             required
@@ -470,35 +490,35 @@ function FileForm({
             onChange={(event) => setName(event.target.value)}
           />
         </Field>
-        <Field label="所在文件夹">
+        <Field label={t('所在文件夹')}>
           <FolderSelect folders={folders} value={folderId} onChange={setFolderId} />
         </Field>
         <KeyPicker keys={keys} value={keyIds} onChange={setKeyIds} />
         <dl className="details-list">
           <div>
-            <dt>原始名称</dt>
+            <dt>{t('原始名称')}</dt>
             <dd>{item.originalName}</dd>
           </div>
           <div>
-            <dt>版本</dt>
+            <dt>{t('版本')}</dt>
             <dd className="mono">{item.id}</dd>
           </div>
           <div>
-            <dt>大小</dt>
+            <dt>{t('大小')}</dt>
             <dd>{bytes(item.size)}</dd>
           </div>
           <div>
-            <dt>上传时间</dt>
+            <dt>{t('上传时间')}</dt>
             <dd>{date(item.uploadedAt, true)}</dd>
           </div>
         </dl>
         <Alert>{error}</Alert>
         <div className="modal-actions">
           <button type="button" className="button button-secondary" onClick={onClose}>
-            取消
+            {t('取消')}
           </button>
           <button className="button button-primary" disabled={busy}>
-            {busy ? <Spinner label="保存中" /> : '保存更改'}
+            {busy ? <Spinner label={t('保存中')} /> : t('保存更改')}
           </button>
         </div>
       </form>

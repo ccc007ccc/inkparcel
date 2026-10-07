@@ -24,6 +24,7 @@ publicApi.get('/site', (c) =>
     initialized: !!c.get('settings'),
     stealthMode: !!c.get('settings')?.stealth_mode,
     iconUrl: iconUrl(c.get('settings')?.icon_version),
+    hasCustomIcon: !!c.get('settings')?.icon_version,
   }),
 );
 publicApi.on(['GET', 'HEAD'], '/site-icon', async (c) => {

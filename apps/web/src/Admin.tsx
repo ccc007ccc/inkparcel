@@ -1,3 +1,4 @@
+import { t } from './i18n';
 import { useEffect, useState } from 'react';
 import {
   ArrowUpRight,
@@ -29,7 +30,12 @@ const tabs = [
   { id: 'trace', label: '文件溯源', icon: Fingerprint },
   { id: 'settings', label: '站点设置', icon: Settings2 },
 ];
-export function Admin({ base, onLogout }: AdminProps & { onLogout: () => void }) {
+export function Admin({
+  base,
+  onLogout,
+}: AdminProps & {
+  onLogout: () => void;
+}) {
   const site = useSite();
   function current() {
     const hash = location.hash.slice(1).split('?')[0];
@@ -38,7 +44,10 @@ export function Admin({ base, onLogout }: AdminProps & { onLogout: () => void })
   const [tab, setTab] = useState(current);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState('');
-  const [userFilter, setUserFilter] = useState<{ id: string; name: string }>();
+  const [userFilter, setUserFilter] = useState<{
+    id: string;
+    name: string;
+  }>();
   useEffect(() => {
     const change = () => {
       setTab(current());
@@ -61,7 +70,7 @@ export function Admin({ base, onLogout }: AdminProps & { onLogout: () => void })
         <Brand compact />
         <button
           className="icon-button"
-          aria-label={open ? '关闭导航' : '打开导航'}
+          aria-label={open ? t('关闭导航') : t('打开导航')}
           aria-expanded={open}
           onClick={() => setOpen(!open)}
         >
@@ -69,15 +78,19 @@ export function Admin({ base, onLogout }: AdminProps & { onLogout: () => void })
         </button>
       </header>
       {open && (
-        <button aria-label="关闭导航" className="sidebar-overlay" onClick={() => setOpen(false)} />
+        <button
+          aria-label={t('关闭导航')}
+          className="sidebar-overlay"
+          onClick={() => setOpen(false)}
+        />
       )}
       <aside className={`sidebar${open ? ' sidebar-open' : ''}`}>
         <Brand />
         <div className="workspace-label">
           <span className="live-dot" />
-          管理工作台
+          {t('管理工作台')}
         </div>
-        <nav aria-label="管理导航">
+        <nav aria-label={t('管理导航')}>
           {tabs.map((item) => (
             <a
               key={item.id}
@@ -87,24 +100,28 @@ export function Admin({ base, onLogout }: AdminProps & { onLogout: () => void })
               onClick={() => setOpen(false)}
             >
               <item.icon size={19} strokeWidth={1.7} />
-              {item.label}
+              {t(item.label)}
               {tab === item.id && <i />}
             </a>
           ))}
         </nav>
         <div className="sidebar-bottom">
           <div className="sidebar-caption">
-            交付有序
+            {t('交付有序')}
             <br />
-            来处可循<span>{site.name} / WORKSPACE</span>
+            {t('来处可循')}
+            <span>
+              {site.name}
+              {t('/ WORKSPACE')}
+            </span>
           </div>
           <a href="/" target="_blank" rel="noreferrer">
             <ArrowUpRight size={17} />
-            打开下载页
+            {t('打开下载页')}
           </a>
           <button onClick={() => void logout()}>
             <LogOut size={17} />
-            退出管理
+            {t('退出管理')}
           </button>
         </div>
       </aside>

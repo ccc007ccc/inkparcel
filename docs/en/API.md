@@ -14,7 +14,7 @@ be compiled into frontend assets or returned by public discovery APIs.
 
 | Method / path       | Request                                               | Response                                                                         |
 | ------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------- |
-| GET `/api/site`     | —                                                     | `{name, initialized, stealthMode, iconUrl}`                                      |
+| GET `/api/site`     | —                                                     | `{name, initialized, stealthMode, iconUrl, hasCustomIcon}`                       |
 | GET `/api/setup`    | —                                                     | `{available:true}` only before setup, otherwise 404                              |
 | POST `/api/setup`   | `{bootstrapToken,passwordKey,passwordSalt,adminPath}` | `{adminPath}` + admin cookie                                                     |
 | GET `A/api/auth`    | —                                                     | `{authenticated,passwordSalt,kdf:{algorithm:"PBKDF2-SHA256",iterations:600000}}` |
@@ -182,3 +182,11 @@ signature/header/end structure. The browser also checks image decodability.
 authentication and same-origin Origin and return `{iconUrl,hasCustomIcon}`.
 `GET/HEAD /api/site-icon` serves PNG or the built-in SVG with nosniff and no-store.
 Replacement updates a versioned URL and the single D1 icon row atomically.
+
+The public `hasCustomIcon` flag distinguishes an uploaded icon from the original black brand emblem. Custom images replace the emblem entirely; clearing the icon returns this flag to false.
+
+API error codes remain stable and language-independent. The browser translates their
+presentation; diagnostic response messages remain separate from UI localization.
+The `inkparcel_language` preference cookie (`zh-CN` or `en`) controls initial HTML
+language and generic titles/descriptions, not authorization. No database migration
+or settings write is needed to change a browser's language.

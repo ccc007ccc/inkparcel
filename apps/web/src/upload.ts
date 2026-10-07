@@ -13,7 +13,11 @@ export interface UploadState {
   partSize: number;
   partCount: number;
   state?: string;
-  parts: { partNumber: number; etag: string; size: number }[];
+  parts: {
+    partNumber: number;
+    etag: string;
+    size: number;
+  }[];
 }
 const storageKey = 'inkparcel.pending-uploads.v1';
 export function savedUploads(): SavedUpload[] {

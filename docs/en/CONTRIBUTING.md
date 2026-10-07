@@ -39,3 +39,12 @@ or third-party signing keys. Generated test keys and binary fixtures stay ignore
 
 For security issues, follow [SECURITY.md](SECURITY.md), rather than opening a public
 issue containing exploit details. Contributions are provided under Apache-2.0.
+
+## Localization
+
+UI resources live in `apps/web/src/locales/{zh-CN,en}.json`, using readable Chinese
+source-message keys with i18next key separators disabled. Update both resources and
+preserve interpolation names. Render messages with `t`, never translate user data,
+and use full interpolated sentences when word order may differ. Preserve raw API
+errors for diagnostics and translate stable codes for display. Tests check resource
+coverage, interpolation, locale formatting and browser switching without form loss.
