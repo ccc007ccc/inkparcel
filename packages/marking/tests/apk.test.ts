@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import {
-  apkHandler, blobSource, fingerprintApk, handlerFor, inspectApk, APK_MARKER_ID,
+  apkHandler, assertApkMarkable, blobSource, fingerprintApk, formatFor, handlerFor, inspectApk, supportedExtensions, APK_MARKER_ID,
   APK_V2_ID, APK_V3_ID, APK_V31_ID, APK_VERITY_PADDING_ID, MAX_MARKER_SIZE,
   MAX_READ_SIZE, type ByteSource,
 } from '../src';
@@ -88,8 +88,22 @@ describe('APK marking and content identity', () => {
     expect(handlerFor('Release.APK')).toBe(apkHandler);
     expect(await inspectApk(source)).toMatchObject({ hasMarker: false, signingSchemeIds: [APK_V2_ID] });
     expect(await collect(await source.stream(2, 10))).toEqual(bytes.slice(2, 12));
-    expect(() => handlerFor('readme.txt')).toThrow(/APK/);
+    expect(() => handlerFor('readme.txt')).toThrow(/\.apk/i);
     await expect(inspectApk(blobSource(new Blob(['not an apk'])))).rejects.toThrow();
+  });
+
+  it('exposes preflight, fingerprint and media metadata through the format registry', async () => {
+    const format = formatFor('Release.APK');
+    expect(format.id).toBe('apk');
+    expect(format.version).toBe('apk-v1');
+    expect(format.mediaType).toBe('application/vnd.android.package-archive');
+    expect(supportedExtensions).toEqual(['.apk']);
+    expect(format.handler).toBe(handlerFor('another.apk'));
+    const source = memorySource(makeApk().bytes);
+    await expect(format.assertMarkable(source)).resolves.toBeUndefined();
+    expect(await format.fingerprint(source)).toBe(await fingerprintApk(source));
+    const marked = await format.handler.mark(source, marker);
+    await expect(format.assertMarkable(memorySource(await collect(await marked.stream())))).rejects.toMatchObject({ code: 'ALREADY_MARKED' });
   });
 });
 
@@ -223,5 +237,46 @@ describe('malformed and unsupported binary input', () => {
     const source = memorySource(makeApk({ entries }).bytes);
     expect((await inspectApk(source)).hasMarker).toBe(false);
     await expect(apkHandler.mark(source, marker)).rejects.toMatchObject({ code: 'PAIR_LIMIT' });
+    await expect(assertApkMarkable(source)).rejects.toMatchObject({ code: 'PAIR_LIMIT' });
+  });
+
+  it('preflights the worst padding case even when the maximum marker fits an exact page', async () => {
+    const entries = [v2, ...Array.from({ length: 4094 }, (_, id) => ({ id: id + 1, value: new Uint8Array() }))];
+    const initial = makeApk({ entries });
+    const extra = (4096 - ((initial.blockSize + 12 + MAX_MARKER_SIZE) % 4096)) % 4096;
+    entries[0] = { ...v2, value: new Uint8Array(v2.value.length + extra) };
+    const source = memorySource(makeApk({ entries }).bytes);
+    // The largest marker yields exactly 4096 entries; a smaller one also needs a
+    // padding entry and therefore cannot be issued safely from the same upload.
+    await expect(apkHandler.mark(source, new Uint8Array(MAX_MARKER_SIZE))).resolves.toBeDefined();
+    await expect(apkHandler.mark(source, new Uint8Array(MAX_MARKER_SIZE - 1))).rejects.toMatchObject({ code: 'PAIR_LIMIT' });
+    await expect(assertApkMarkable(source)).rejects.toMatchObject({ code: 'PAIR_LIMIT' });
+  });
+
+  it('rejects originals near the ZIP32 size ceiling before publication without streaming their payload', async () => {
+    const fixture = makeApk({ blockOffset: 0xffffffff - 8192 });
+    let streamed = false;
+    const source: ByteSource = {
+      size: fixture.blockOffset + fixture.bytes.length,
+      async read(offset, length) {
+        const output = new Uint8Array(length);
+        const from = Math.max(offset, fixture.blockOffset);
+        if (from < offset + length) output.set(fixture.bytes.subarray(from - fixture.blockOffset, offset + length - fixture.blockOffset), from - offset);
+        return output;
+      },
+      async stream() { streamed = true; throw new Error('Preflight must not stream payloads'); },
+    };
+    await expect(inspectApk(source)).resolves.toBeDefined();
+    await expect(apkHandler.mark(source, marker)).resolves.toBeDefined();
+    await expect(assertApkMarkable(source)).rejects.toMatchObject({ code: 'UNSUPPORTED_SIZE' });
+    expect(streamed).toBe(false);
+  });
+
+  it('checks requested marker-capacity bounds', async () => {
+    const source = memorySource(makeApk().bytes);
+    for (const size of [0, -1, 1.5, MAX_MARKER_SIZE + 1]) {
+      await expect(assertApkMarkable(source, size)).rejects.toMatchObject({ code: 'MARKER_LIMIT' });
+    }
+    await expect(assertApkMarkable(source, 1)).resolves.toBeUndefined();
   });
 });

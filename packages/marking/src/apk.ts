@@ -127,30 +127,53 @@ function encodePair(id: number, value: Uint8Array): Uint8Array {
   return pair;
 }
 
-function plan(source: ByteSource, parsed: ParsedApk, marker?: Uint8Array): MarkedFile {
-  const entries = parsed.pairs.filter(pair => pair.id !== APK_MARKER_ID && pair.id !== APK_VERITY_PADDING_ID)
-    .map(pair => pair.bytes);
-  if (marker) entries.push(encodePair(APK_MARKER_ID, marker));
-  let blockSize = 32 + entries.reduce((total, entry) => total + entry.length, 0);
-  if (marker) {
+/** Calculate capacity before allocating replacement entries or exposing ready files. */
+function layout(parsed: ParsedApk, markerSize?: number) {
+  const entries = parsed.pairs.filter(pair => pair.id !== APK_MARKER_ID && pair.id !== APK_VERITY_PADDING_ID);
+  let blockSize = 32 + entries.reduce((total, entry) => total + entry.bytes.length, 0)
+    + (markerSize === undefined ? 0 : 12 + markerSize);
+  let paddingLength = 0;
+  if (markerSize !== undefined) {
     // Existing signing-block space is reused when possible. New space is page aligned
     // for APK verity; the signing block's original start is never moved.
     let target = Math.ceil(blockSize / 4096) * 4096;
     if (parsed.signingBlockSize % 4096 === 0) target = Math.max(target, parsed.signingBlockSize);
     if (target !== blockSize && target - blockSize < 12) target += 4096;
     if (target > MAX_SIGNING_BLOCK_SIZE) fail('SIGNING_BLOCK_LIMIT', 'Marked APK signing block would exceed 16 MiB.');
-    if (target > blockSize) {
-      const padding = new Uint8Array(target - blockSize);
-      view(padding).setBigUint64(0, BigInt(padding.length - 8), true);
-      view(padding).setUint32(8, APK_VERITY_PADDING_ID, true);
-      entries.push(padding);
-      blockSize = target;
-    }
+    paddingLength = target - blockSize;
+    blockSize = target;
   }
-  if (entries.length > MAX_PAIRS) fail('PAIR_LIMIT', 'Marked APK would exceed the signing-block entry limit.');
+  const entryCount = entries.length + (markerSize === undefined ? 0 : 1) + (paddingLength ? 1 : 0);
+  if (entryCount > MAX_PAIRS) fail('PAIR_LIMIT', 'Marked APK would exceed the signing-block entry limit.');
   const newDirectoryOffset = parsed.signingBlockOffset + blockSize;
-  const newSize = source.size + blockSize - parsed.signingBlockSize;
+  const newSize = parsed.size + blockSize - parsed.signingBlockSize;
   if (newDirectoryOffset >= 0xffffffff || newSize > MAX_APK_SIZE) fail('UNSUPPORTED_SIZE', 'Marked APK would exceed supported ZIP32 offsets or size.');
+  return { entries, blockSize, paddingLength, newDirectoryOffset };
+}
+
+/** Ensure every marker length through the requested maximum can be represented. */
+export async function assertApkMarkable(source: ByteSource, maxMarkerSize = MAX_MARKER_SIZE): Promise<void> {
+  if (!Number.isSafeInteger(maxMarkerSize) || maxMarkerSize < 1 || maxMarkerSize > MAX_MARKER_SIZE) {
+    fail('MARKER_LIMIT', 'Marker capacity must be between 1 byte and 16 KiB.');
+  }
+  const parsed = await parseApk(source);
+  if (parsed.hasMarker) fail('ALREADY_MARKED', 'Upload an original APK without an InkParcel marker.');
+  layout(parsed, maxMarkerSize);
+  // An exactly aligned block needs no padding entry. One byte less can require an
+  // extra page and entry, so checking only the longest marker is insufficient.
+  if (maxMarkerSize > 1) layout(parsed, maxMarkerSize - 1);
+}
+
+function plan(source: ByteSource, parsed: ParsedApk, marker?: Uint8Array): MarkedFile {
+  const { entries: originalEntries, blockSize, paddingLength, newDirectoryOffset } = layout(parsed, marker?.length);
+  const entries = originalEntries.map(pair => pair.bytes);
+  if (marker) entries.push(encodePair(APK_MARKER_ID, marker));
+  if (paddingLength) {
+    const padding = new Uint8Array(paddingLength);
+    view(padding).setBigUint64(0, BigInt(padding.length - 8), true);
+    view(padding).setUint32(8, APK_VERITY_PADDING_ID, true);
+    entries.push(padding);
+  }
   const header = new Uint8Array(8);
   view(header).setBigUint64(0, BigInt(blockSize - 8), true);
   const footer = new Uint8Array(24);

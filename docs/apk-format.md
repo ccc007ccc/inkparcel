@@ -26,6 +26,14 @@ limits to keep memory and parsing bounded, rather than Android format limits.
 Lengths are decoded as unsigned little-endian integers, with 64-bit fields checked
 before conversion to JavaScript numbers.
 
+Publication also calls `assertApkMarkable`: it parses once, rejects an existing
+InkParcel marker, and checks that **every** marker size from 1 byte through 16 KiB
+fits the entry, block-size and output-offset limits. This does not stream the
+payload or allocate hypothetical marked outputs. It checks the maximum length and
+one byte less because an exactly page-aligned block needs no padding, while a
+shorter marker can require another page and another entry. A structurally valid
+original may fail this capacity check, for example at 4096 entries or near 4 GiB.
+
 ## Marking
 
 InkParcel uses the dedicated outer APK Signing Block entry ID `0x49504b31` (`IPK1`)
@@ -101,6 +109,21 @@ requires reading all canonical bytes, but never buffers the complete file. The
 application separately displays marker authenticity, content fingerprint match and
 issuance metadata. A valid marker establishes an issuance record; it can be removed
 or copied and does not prove who leaked a file. See [the product contract](SPEC.md#marker-and-apk-contracts).
+
+## Format registration
+
+`formatFor(filename)` returns the registered `id`, `version`, `extensions`,
+`mediaType`, `handler`, `fingerprint` and `assertMarkable` capabilities.
+`supportedExtensions` contains the leading-dot extensions for browser file
+pickers. `handlerFor` remains a compatibility shorthand for `.handler`.
+The APK descriptor is `id: apk`, `version: apk-v1` and `.apk`; version identifies
+the persisted marking/fingerprint contract. `mark` and `extract` remain the two
+functions on the marker handler. Preflight and fingerprinting are capabilities
+of the surrounding format adapter, not part of envelope generation.
+
+New formats provide an adapter and add one registry entry in
+`packages/marking/src/registry.ts`. Uploads, downloads and browser tracing consume
+the descriptor rather than branching on APK names or hardcoding a media type.
 
 ## References
 
