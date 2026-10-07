@@ -43,7 +43,11 @@ scripts are committed, so the evidence can be reproduced without private inputs.
 
 The committed [Checks workflow](../.github/workflows/checks.yml) runs the local
 checks, generated Android signature matrix and Chromium workflow on Ubuntu/Node 24.
-The first GitHub execution will be recorded after the repository is created.
+[Run 37622194426](https://github.com/ccc007ccc/inkparcel/actions/runs/37622194426)
+passed for code commit `6bb3fa6`: all 55 package tests, production build/dry run,
+six signed APK combinations plus the v1-only rejection, and the complete Chromium
+workflow. The release's subsequent documentation-only update does not alter that
+verified executable tree.
 
 ## Remote acceptance
 
