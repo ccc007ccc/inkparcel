@@ -1,0 +1,198 @@
+import { useEffect, useState } from 'react';
+import {
+  ArrowDownToLine,
+  ArrowUpRight,
+  FileBox,
+  Folder as FolderIcon,
+  LogOut,
+  ShieldCheck,
+} from 'lucide-react';
+import { Alert, Brand, Breadcrumbs, Empty, Pagination, Spinner } from './components';
+import {
+  api,
+  bytes,
+  date,
+  downloadUrl,
+  message,
+  post,
+  query,
+  type Folder,
+  type PublicFile,
+  type Session,
+} from './lib';
+interface Library {
+  files: PublicFile[];
+  folders: Folder[];
+  breadcrumbs: Folder[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+export function PublicLibrary({
+  name,
+  session,
+  onLogout,
+}: {
+  name: string;
+  session: Session;
+  onLogout: () => void;
+}) {
+  const [folderId, setFolderId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [library, setLibrary] = useState<Library>();
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    setLibrary(undefined);
+    setError('');
+    api<Library>(`/api/files${query({ folderId, page })}`)
+      .then((result) => {
+        if (live) setLibrary(result);
+      })
+      .catch((error) => {
+        if (live) setError(message(error));
+      });
+    return () => {
+      live = false;
+    };
+  }, [folderId, page]);
+  function navigate(id: string | null) {
+    setFolderId(id);
+    setPage(1);
+  }
+  async function download(file: PublicFile) {
+    setBusy(file.id);
+    setError('');
+    try {
+      const result = await post<{ url: string; fileName: string }>(
+        `/api/files/${file.id}/downloads`,
+      );
+      downloadUrl(result.url, result.fileName);
+    } catch (error) {
+      setError(message(error));
+    } finally {
+      setBusy(null);
+    }
+  }
+  async function logout() {
+    try {
+      await post('/api/logout');
+      onLogout();
+    } catch (error) {
+      setError(message(error));
+    }
+  }
+  return (
+    <div className="public-page">
+      <header className="site-header">
+        <Brand />
+        <button className="button button-quiet" onClick={() => void logout()}>
+          <LogOut size={16} />
+          退出
+        </button>
+      </header>
+      <main className="public-main">
+        <section className="public-intro">
+          <div>
+            <span className="eyebrow">YOUR PERSONAL LIBRARY</span>
+            <h1>{name}</h1>
+            <p>
+              你好，<strong>{session.user.userId}</strong>。你的文件已准备就绪。
+            </p>
+          </div>
+          <div className="recipient-seal">
+            <ShieldCheck size={23} />
+            <span>
+              专属访问<small>{session.key.name}</small>
+            </span>
+          </div>
+        </section>
+        <div className="library-top">
+          <Breadcrumbs folders={library?.breadcrumbs ?? []} onChange={navigate} />
+          <span className="muted small">{library ? `${library.total} 个文件` : ''}</span>
+        </div>
+        <Alert>{error}</Alert>
+        {!library && !error ? (
+          <div className="loading-area">
+            <Spinner />
+          </div>
+        ) : (
+          library && (
+            <>
+              {library.folders.length > 0 && (
+                <div className="folder-grid">
+                  {library.folders.map((folder) => (
+                    <button
+                      className="folder-tile"
+                      key={folder.id}
+                      onClick={() => navigate(folder.id)}
+                    >
+                      <FolderIcon size={25} strokeWidth={1.5} />
+                      <span>{folder.name}</span>
+                      <ArrowUpRight size={16} />
+                    </button>
+                  ))}
+                </div>
+              )}
+              {library.files.length ? (
+                <div className="file-list">
+                  {library.files.map((file) => (
+                    <article className="public-file" key={file.id}>
+                      <div className="file-icon">
+                        <FileBox size={25} strokeWidth={1.5} />
+                      </div>
+                      <div className="file-info">
+                        <h2>{file.name}</h2>
+                        <p>
+                          {bytes(file.size)}
+                          <span>·</span>
+                          {date(file.uploadedAt)}
+                        </p>
+                      </div>
+                      <button
+                        className="button button-secondary"
+                        aria-label={`领取 ${file.name}`}
+                        disabled={busy === file.id}
+                        onClick={() => void download(file)}
+                      >
+                        {busy === file.id ? (
+                          <Spinner label="准备中" />
+                        ) : (
+                          <>
+                            <ArrowDownToLine size={17} />
+                            <span>领取文件</span>
+                          </>
+                        )}
+                      </button>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <Empty
+                  title={library.folders.length ? '此文件夹下没有文件' : '暂时没有可领取的文件'}
+                >
+                  文件准备好后会出现在这里。
+                </Empty>
+              )}
+              <Pagination
+                total={library.total}
+                page={page}
+                pageSize={library.pageSize}
+                onChange={setPage}
+              />
+            </>
+          )
+        )}
+        <p className="delivery-note">
+          <ShieldCheck size={17} />
+          下载文件将写入与你的领取记录关联的专属标记。
+        </p>
+      </main>
+      <footer className="site-footer">
+        <span>Powered by InkParcel</span>
+        <span>一份文件，一枚印记。</span>
+      </footer>
+    </div>
+  );
+}
