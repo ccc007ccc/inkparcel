@@ -1,0 +1,9 @@
+node_modules/
+target/
+dist/
+.wrangler/
+coverage/
+playwright-report/
+test-results/
+pnpm-lock.yaml
+LICENSE

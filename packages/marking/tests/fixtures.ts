@@ -1,20 +1,39 @@
 import type { ByteSource } from '../src';
 
-export interface TestEntry { id: number; value: Uint8Array }
+export interface TestEntry {
+  id: number;
+  value: Uint8Array;
+}
 const encoder = new TextEncoder();
 
 export function concatenate(...parts: Uint8Array[]): Uint8Array {
   const output = new Uint8Array(parts.reduce((size, part) => size + part.length, 0));
   let offset = 0;
-  for (const part of parts) { output.set(part, offset); offset += part.length; }
+  for (const part of parts) {
+    output.set(part, offset);
+    offset += part.length;
+  }
   return output;
 }
 
 /** Structural ZIP fixture, deliberately not presented as an Android-signed APK. */
-export function makeApk(options: {
-  entries?: TestEntry[]; comment?: Uint8Array; blockOffset?: number; padding?: number;
-} = {}): { bytes: Uint8Array; blockOffset: number; blockSize: number; cdOffset: number; eocdOffset: number } {
-  const entries = options.entries ?? [{ id: 0x7109871a, value: encoder.encode('synthetic signing identity') }];
+export function makeApk(
+  options: {
+    entries?: TestEntry[];
+    comment?: Uint8Array;
+    blockOffset?: number;
+    padding?: number;
+  } = {},
+): {
+  bytes: Uint8Array;
+  blockOffset: number;
+  blockSize: number;
+  cdOffset: number;
+  eocdOffset: number;
+} {
+  const entries = options.entries ?? [
+    { id: 0x7109871a, value: encoder.encode('synthetic signing identity') },
+  ];
   const pairBytes = entries.map(({ id, value }) => {
     const pair = new Uint8Array(12 + value.length);
     const data = new DataView(pair.buffer);
@@ -28,7 +47,10 @@ export function makeApk(options: {
   const bv = new DataView(block.buffer);
   bv.setBigUint64(0, BigInt(blockSize - 8), true);
   let pairOffset = 8;
-  for (const pair of pairBytes) { block.set(pair, pairOffset); pairOffset += pair.length; }
+  for (const pair of pairBytes) {
+    block.set(pair, pairOffset);
+    pairOffset += pair.length;
+  }
   bv.setBigUint64(block.length - 24, BigInt(blockSize - 8), true);
   block.set(encoder.encode('APK Sig Block 42'), block.length - 16);
   const blockOffset = options.blockOffset ?? 96;
@@ -47,21 +69,31 @@ export function makeApk(options: {
   ev.setUint16(20, comment.length, true);
   eocd.set(comment, 22);
   return {
-    bytes: concatenate(prefix, block, cd, eocd), blockOffset, blockSize,
-    cdOffset: blockOffset + block.length, eocdOffset: blockOffset + block.length + cd.length,
+    bytes: concatenate(prefix, block, cd, eocd),
+    blockOffset,
+    blockSize,
+    cdOffset: blockOffset + block.length,
+    eocdOffset: blockOffset + block.length + cd.length,
   };
 }
 
 export function memorySource(bytes: Uint8Array, maxChunk = 113): ByteSource & { reads: number[] } {
   const reads: number[] = [];
   return {
-    size: bytes.length, reads,
-    async read(offset, length) { reads.push(length); return bytes.slice(offset, offset + length); },
+    size: bytes.length,
+    reads,
+    async read(offset, length) {
+      reads.push(length);
+      return bytes.slice(offset, offset + length);
+    },
     async stream(offset, length) {
       let position = offset;
       return new ReadableStream({
         pull(controller) {
-          if (position === offset + length) { controller.close(); return; }
+          if (position === offset + length) {
+            controller.close();
+            return;
+          }
           const next = Math.min(position + maxChunk, offset + length);
           controller.enqueue(bytes.slice(position, next));
           position = next;
@@ -80,19 +112,26 @@ export async function collect(stream: ReadableStream<Uint8Array>): Promise<Uint8
       if (item.done) break;
       chunks.push(item.value);
     }
-  } finally { reader.releaseLock(); }
+  } finally {
+    reader.releaseLock();
+  }
   return concatenate(...chunks);
 }
 
 export function entriesIn(bytes: Uint8Array): TestEntry[] {
   const ev = new DataView(bytes.buffer, bytes.byteOffset + bytes.length - 22, 22);
   const cdOffset = ev.getUint32(16, true);
-  const blockSize = Number(new DataView(bytes.buffer, bytes.byteOffset + cdOffset - 24, 8).getBigUint64(0, true)) + 8;
+  const blockSize =
+    Number(new DataView(bytes.buffer, bytes.byteOffset + cdOffset - 24, 8).getBigUint64(0, true)) +
+    8;
   const data = new DataView(bytes.buffer, bytes.byteOffset);
   const entries: TestEntry[] = [];
   for (let offset = cdOffset - blockSize + 8; offset < cdOffset - 24;) {
     const length = Number(data.getBigUint64(offset, true));
-    entries.push({ id: data.getUint32(offset + 8, true), value: bytes.slice(offset + 12, offset + 8 + length) });
+    entries.push({
+      id: data.getUint32(offset + 8, true),
+      value: bytes.slice(offset + 12, offset + 8 + length),
+    });
     offset += 8 + length;
   }
   return entries;

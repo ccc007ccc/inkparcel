@@ -20,9 +20,13 @@ export async function fingerprintApk(
       processed += value.byteLength;
       onProgress?.(processed, canonical.size);
     }
-    return Array.from(digest.digest(), byte => byte.toString(16).padStart(2, '0')).join('');
+    return Array.from(digest.digest(), (byte) => byte.toString(16).padStart(2, '0')).join('');
   } catch (error) {
-    try { await reader.cancel(error); } catch { /* Preserve the original failure. */ }
+    try {
+      await reader.cancel(error);
+    } catch {
+      /* Preserve the original failure. */
+    }
     throw error;
   } finally {
     digest.destroy();

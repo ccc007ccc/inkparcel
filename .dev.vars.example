@@ -1,0 +1,5 @@
+# Copying this example is insufficient: generate fresh random secrets with
+# `pnpm setup:local`. Local secrets are ignored by Git.
+APP_SECRET="REPLACE_WITH_32_RANDOM_BYTES_BASE64URL"
+BOOTSTRAP_TOKEN="REPLACE_WITH_32_RANDOM_BYTES_BASE64URL"
+ENVIRONMENT="local"

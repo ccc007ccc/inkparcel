@@ -115,11 +115,11 @@ they do not record an existing production deployment.
 The following published allowances were checked on 2026-10-07. Confirm the current
 official pages and the actual account plan before deployment.
 
-| Service | Included allowance relevant to this deployment |
-| --- | --- |
-| [Workers Free](https://developers.cloudflare.com/workers/platform/pricing/) | 100,000 requests/day; 10 ms CPU per invocation |
-| [R2 Standard](https://developers.cloudflare.com/r2/pricing/) | 10 GB-month storage/month; 1 million Class A and 10 million Class B operations/month; free Internet egress |
-| [D1 Free](https://developers.cloudflare.com/d1/platform/pricing/) | 5 million rows read/day; 100,000 rows written/day; 5 GB total account storage |
+| Service                                                                     | Included allowance relevant to this deployment                                                             |
+| --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| [Workers Free](https://developers.cloudflare.com/workers/platform/pricing/) | 100,000 requests/day; 10 ms CPU per invocation                                                             |
+| [R2 Standard](https://developers.cloudflare.com/r2/pricing/)                | 10 GB-month storage/month; 1 million Class A and 10 million Class B operations/month; free Internet egress |
+| [D1 Free](https://developers.cloudflare.com/d1/platform/pricing/)           | 5 million rows read/day; 100,000 rows written/day; 5 GB total account storage                              |
 
 The D1 [per-database Free limit](https://developers.cloudflare.com/d1/platform/limits/)
 is 500 MB; this application uses one database. Rows scanned and index writes count

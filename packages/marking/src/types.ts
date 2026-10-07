@@ -1,4 +1,7 @@
-export interface ByteRange { offset: number; length: number }
+export interface ByteRange {
+  offset: number;
+  length: number;
+}
 
 /** The underlying bytes must remain immutable for the lifetime of this source. */
 export interface ByteSource {
@@ -18,7 +21,10 @@ export interface MarkerHandler {
 }
 
 export class MarkingError extends Error {
-  constructor(public readonly code: string, message: string) {
+  constructor(
+    public readonly code: string,
+    message: string,
+  ) {
     super(message);
     this.name = 'MarkingError';
   }

@@ -5,18 +5,23 @@
   "license": "Apache-2.0",
   "private": true,
   "packageManager": "pnpm@9.15.9",
-  "engines": { "node": ">=22.0.0" },
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
     "dev": "pnpm build:web && concurrently -k \"vite build --watch\" \"wrangler dev\"",
     "build:web": "vite build",
     "build": "pnpm build:web && wrangler deploy --dry-run",
-    "typecheck": "pnpm -r typecheck",
+    "typecheck": "tsc -p tsconfig.json && pnpm -r typecheck",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "docs:check": "node scripts/check-doc-links.mjs",
     "test": "pnpm -r test",
     "test:apk": "tsx scripts/verify-apks.ts",
     "test:e2e": "playwright test",
     "fixtures": "python3 scripts/generate-apk-fixtures.py",
     "setup:local": "node scripts/init-local.mjs",
-    "check": "pnpm typecheck && pnpm test && pnpm build",
+    "check": "pnpm format:check && pnpm docs:check && pnpm typecheck && pnpm test && pnpm build",
     "db:migrate": "wrangler d1 migrations apply inkparcel --local",
     "deploy": "pnpm build:web && wrangler deploy"
   },
@@ -25,8 +30,9 @@
     "@types/node": "^24.0.0",
     "@vitejs/plugin-react": "^5.0.0",
     "concurrently": "^9.2.0",
-    "typescript": "^5.9.3",
+    "prettier": "^3.6.0",
     "tsx": "^4.20.0",
+    "typescript": "^5.9.3",
     "vite": "^7.2.0",
     "vitest": "^4.1.0",
     "wrangler": "^4.148.0"

@@ -43,6 +43,8 @@ scope. Interfaces must permit adding handlers without changing issuance logic.
 - Each key has immutable UUID/short code, editable display name, 256-bit secret,
   enabled state and creation time. Duplicate secret imports are rejected. Secrets
   are encrypted in D1 using purpose-separated material from `APP_SECRET`.
+  The initial operational limits are 100 keys and 1000 folders; bulk ACL writes
+  remain inside the D1 Free request query limit at those bounds.
 - HMAC-SHA-256 codes have a public key ID prefix and at least 128 authentication bits.
   Code and marker subkeys are domain separated; comparison is constant-time.
 - A recipient session binds one user and one successfully validated key. First
@@ -74,13 +76,16 @@ scope. Interfaces must permit adding handlers without changing issuance logic.
   name snapshot, display name, folder, size, normalized content fingerprint,
   handler version, upload time and pending/ready/deleted state. Re-uploading a name
   creates a new version; historical objects/identities are never overwritten.
+- Display names may omit an extension. Issuance appends the registered format's
+  primary extension when needed and snapshots this effective download filename in
+  both the marker and record, so the result remains installable and locally traceable.
 - `file_keys` is explicit many-to-many authorization. Empty selection means admin
   only. Folder defaults may be copied at upload, never applied retroactively.
 - Recipient folders are only the ancestors of accessible files; hidden filenames
   and empty unauthorized folders must not be exposed.
 - Upload sessions bind authenticated administrators, object keys, expected sizes and
   part indexes. Finalization validates actual object length and APK structure before
-  marking ready. Browser supplies the normalized fingerprint; the trust boundary is
+  marking ready, including capacity for any permitted marker. Browser supplies the normalized fingerprint; the trust boundary is
   the authenticated uploader, and local tracing recomputes it independently.
 - Incomplete uploads can be resumed/aborted; cleanup handles stale multipart state.
   File deletion is logical for provenance and removes the object when requested.
@@ -96,6 +101,10 @@ The byte-level format and fingerprint algorithm are defined in [APK format](apk-
 - A handler exposes `mark(source, marker)` and `extract(source)`. The source offers
   size, bounded reads and streams. Mark returns the output size and a range-capable
   stream factory so byte ranges refer to the personalized representation.
+- The format registry also supplies media type, extensions, immutable format version,
+  local fingerprinting and bounded preflight. Upload/download/trace workflows select
+  these capabilities from the registry. Stored version mismatches fail explicitly;
+  an upgrade must not silently change an existing issuance's bytes or fingerprint.
 - Extension chooses a handler candidate; structural validation confirms the format.
   Unsupported formats and unsupported signing layouts fail explicitly.
 - APK support preserves existing v2/v3-family signatures using a dedicated custom

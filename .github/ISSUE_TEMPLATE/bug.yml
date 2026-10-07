@@ -1,0 +1,30 @@
+name: Bug report
+description: Report a reproducible functional problem using nonprivate examples.
+body:
+  - type: markdown
+    attributes:
+      value: Please use SECURITY.md for vulnerabilities. Do not post secrets, recipient information or private APKs.
+  - type: input
+    id: version
+    attributes:
+      label: InkParcel version or commit
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Include browser/runtime information and a generic example when possible.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Nonsecret error details
+      description: Redact tokens, user identifiers, marker payloads and private file names.

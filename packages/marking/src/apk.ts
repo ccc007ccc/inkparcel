@@ -25,11 +25,21 @@ export interface ApkInspection {
   signingSchemeIds: number[];
 }
 
-interface Pair { id: number; bytes: Uint8Array }
-interface ParsedApk extends ApkInspection { pairs: Pair[]; eocd: Uint8Array }
+interface Pair {
+  id: number;
+  bytes: Uint8Array;
+}
+interface ParsedApk extends ApkInspection {
+  pairs: Pair[];
+  eocd: Uint8Array;
+}
 
-function fail(code: string, message: string): never { throw new MarkingError(code, message); }
-function view(bytes: Uint8Array): DataView { return new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength); }
+function fail(code: string, message: string): never {
+  throw new MarkingError(code, message);
+}
+function view(bytes: Uint8Array): DataView {
+  return new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+}
 function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
   return a.length === b.length && a.every((byte, index) => byte === b[index]);
 }
@@ -44,13 +54,17 @@ async function parseApk(source: ByteSource): Promise<ParsedApk> {
   const tailView = view(tail);
   let found = -1;
   for (let i = tail.length - 22; i >= 0; i--) {
-    if (tailView.getUint32(i, true) === 0x06054b50
-      && i + 22 + tailView.getUint16(i + 20, true) === tail.length) {
-      if (found !== -1) fail('AMBIGUOUS_EOCD', 'Multiple end-of-directory records describe the same file ending.');
+    if (
+      tailView.getUint32(i, true) === 0x06054b50 &&
+      i + 22 + tailView.getUint16(i + 20, true) === tail.length
+    ) {
+      if (found !== -1)
+        fail('AMBIGUOUS_EOCD', 'Multiple end-of-directory records describe the same file ending.');
       found = i;
     }
   }
-  if (found === -1) fail('INVALID_EOCD', 'APK end-of-directory record is missing or has trailing bytes.');
+  if (found === -1)
+    fail('INVALID_EOCD', 'APK end-of-directory record is missing or has trailing bytes.');
   const eocdOffset = tailOffset + found;
   const eocd = tail.slice(found);
   const end = view(eocd);
@@ -60,42 +74,64 @@ async function parseApk(source: ByteSource): Promise<ParsedApk> {
   const entries = end.getUint16(10, true);
   const centralDirectorySize = end.getUint32(12, true);
   const centralDirectoryOffset = end.getUint32(16, true);
-  if (entries === 0xffff || centralDirectorySize === 0xffffffff || centralDirectoryOffset === 0xffffffff) {
+  if (
+    entries === 0xffff ||
+    centralDirectorySize === 0xffffffff ||
+    centralDirectoryOffset === 0xffffffff
+  ) {
     fail('ZIP64_UNSUPPORTED', 'ZIP64 APKs are not supported.');
   }
-  if (end.getUint16(4, true) !== 0 || end.getUint16(6, true) !== 0 || end.getUint16(8, true) !== entries) {
+  if (
+    end.getUint16(4, true) !== 0 ||
+    end.getUint16(6, true) !== 0 ||
+    end.getUint16(8, true) !== entries
+  ) {
     fail('MULTIDISK_UNSUPPORTED', 'Split ZIP archives are not supported.');
   }
-  if (entries === 0 || centralDirectorySize < 46 || centralDirectoryOffset < 32
-    || centralDirectoryOffset + centralDirectorySize !== eocdOffset) {
+  if (
+    entries === 0 ||
+    centralDirectorySize < 46 ||
+    centralDirectoryOffset < 32 ||
+    centralDirectoryOffset + centralDirectorySize !== eocdOffset
+  ) {
     fail('INVALID_DIRECTORY', 'APK central directory offsets or entry counts are invalid.');
   }
   const cdHead = await readBytes(source, centralDirectoryOffset, 4);
-  if (view(cdHead).getUint32(0, true) !== 0x02014b50) fail('INVALID_DIRECTORY', 'APK central directory signature is missing.');
+  if (view(cdHead).getUint32(0, true) !== 0x02014b50)
+    fail('INVALID_DIRECTORY', 'APK central directory signature is missing.');
   const footer = await readBytes(source, centralDirectoryOffset - 24, 24);
-  if (!sameBytes(footer.subarray(8), MAGIC)) fail('SIGNING_BLOCK_MISSING', 'A v2 APK signing block is required; v1-only APKs are unsupported.');
+  if (!sameBytes(footer.subarray(8), MAGIC))
+    fail(
+      'SIGNING_BLOCK_MISSING',
+      'A v2 APK signing block is required; v1-only APKs are unsupported.',
+    );
   const sizeValue = view(footer).getBigUint64(0, true);
   if (sizeValue < 24n || sizeValue + 8n > BigInt(MAX_SIGNING_BLOCK_SIZE)) {
     fail('SIGNING_BLOCK_LIMIT', 'APK signing block is malformed or exceeds the 16 MiB limit.');
   }
   const signingBlockSize = Number(sizeValue + 8n);
   const signingBlockOffset = centralDirectoryOffset - signingBlockSize;
-  if (signingBlockOffset < 0) fail('INVALID_SIGNING_OFFSET', 'APK signing block starts before the file.');
+  if (signingBlockOffset < 0)
+    fail('INVALID_SIGNING_OFFSET', 'APK signing block starts before the file.');
   const block = await readBytes(source, signingBlockOffset, signingBlockSize);
   const blockView = view(block);
-  if (blockView.getBigUint64(0, true) !== sizeValue) fail('SIGNING_SIZE_MISMATCH', 'APK signing block size fields disagree.');
+  if (blockView.getBigUint64(0, true) !== sizeValue)
+    fail('SIGNING_SIZE_MISMATCH', 'APK signing block size fields disagree.');
   const pairs: Pair[] = [];
   const singletonIds = new Set<number>();
   for (let position = 8; position < block.length - 24;) {
-    if (pairs.length >= MAX_PAIRS) fail('PAIR_LIMIT', 'APK signing block contains too many entries.');
-    if (block.length - 24 - position < 12) fail('INVALID_PAIR', 'APK signing block entry header is truncated.');
+    if (pairs.length >= MAX_PAIRS)
+      fail('PAIR_LIMIT', 'APK signing block contains too many entries.');
+    if (block.length - 24 - position < 12)
+      fail('INVALID_PAIR', 'APK signing block entry header is truncated.');
     const length = blockView.getBigUint64(position, true);
     if (length < 4n || length > BigInt(block.length - 24 - position - 8)) {
       fail('INVALID_PAIR', 'APK signing block entry length is out of bounds.');
     }
     const id = blockView.getUint32(position + 8, true);
     if (id === APK_MARKER_ID || id === APK_VERITY_PADDING_ID || SCHEME_IDS.has(id)) {
-      if (singletonIds.has(id)) fail('DUPLICATE_ENTRY', 'APK contains duplicate marker, padding or signature entries.');
+      if (singletonIds.has(id))
+        fail('DUPLICATE_ENTRY', 'APK contains duplicate marker, padding or signature entries.');
       singletonIds.add(id);
     }
     if (id === APK_MARKER_ID && (length - 4n < 1n || length - 4n > BigInt(MAX_MARKER_SIZE))) {
@@ -105,11 +141,19 @@ async function parseApk(source: ByteSource): Promise<ParsedApk> {
     pairs.push({ id, bytes: block.subarray(position, next) });
     position = next;
   }
-  if (!singletonIds.has(APK_V2_ID)) fail('V2_REQUIRED', 'This release requires a v2 signature, optionally alongside v3 or v3.1.');
+  if (!singletonIds.has(APK_V2_ID))
+    fail('V2_REQUIRED', 'This release requires a v2 signature, optionally alongside v3 or v3.1.');
   return {
-    size: source.size, signingBlockOffset, signingBlockSize, centralDirectoryOffset,
-    centralDirectorySize, eocdOffset, hasMarker: singletonIds.has(APK_MARKER_ID),
-    signingSchemeIds: pairs.filter(pair => SCHEME_IDS.has(pair.id)).map(pair => pair.id), pairs, eocd,
+    size: source.size,
+    signingBlockOffset,
+    signingBlockSize,
+    centralDirectoryOffset,
+    centralDirectorySize,
+    eocdOffset,
+    hasMarker: singletonIds.has(APK_MARKER_ID),
+    signingSchemeIds: pairs.filter((pair) => SCHEME_IDS.has(pair.id)).map((pair) => pair.id),
+    pairs,
+    eocd,
   };
 }
 
@@ -129,9 +173,13 @@ function encodePair(id: number, value: Uint8Array): Uint8Array {
 
 /** Calculate capacity before allocating replacement entries or exposing ready files. */
 function layout(parsed: ParsedApk, markerSize?: number) {
-  const entries = parsed.pairs.filter(pair => pair.id !== APK_MARKER_ID && pair.id !== APK_VERITY_PADDING_ID);
-  let blockSize = 32 + entries.reduce((total, entry) => total + entry.bytes.length, 0)
-    + (markerSize === undefined ? 0 : 12 + markerSize);
+  const entries = parsed.pairs.filter(
+    (pair) => pair.id !== APK_MARKER_ID && pair.id !== APK_VERITY_PADDING_ID,
+  );
+  let blockSize =
+    32 +
+    entries.reduce((total, entry) => total + entry.bytes.length, 0) +
+    (markerSize === undefined ? 0 : 12 + markerSize);
   let paddingLength = 0;
   if (markerSize !== undefined) {
     // Existing signing-block space is reused when possible. New space is page aligned
@@ -139,25 +187,36 @@ function layout(parsed: ParsedApk, markerSize?: number) {
     let target = Math.ceil(blockSize / 4096) * 4096;
     if (parsed.signingBlockSize % 4096 === 0) target = Math.max(target, parsed.signingBlockSize);
     if (target !== blockSize && target - blockSize < 12) target += 4096;
-    if (target > MAX_SIGNING_BLOCK_SIZE) fail('SIGNING_BLOCK_LIMIT', 'Marked APK signing block would exceed 16 MiB.');
+    if (target > MAX_SIGNING_BLOCK_SIZE)
+      fail('SIGNING_BLOCK_LIMIT', 'Marked APK signing block would exceed 16 MiB.');
     paddingLength = target - blockSize;
     blockSize = target;
   }
   const entryCount = entries.length + (markerSize === undefined ? 0 : 1) + (paddingLength ? 1 : 0);
-  if (entryCount > MAX_PAIRS) fail('PAIR_LIMIT', 'Marked APK would exceed the signing-block entry limit.');
+  if (entryCount > MAX_PAIRS)
+    fail('PAIR_LIMIT', 'Marked APK would exceed the signing-block entry limit.');
   const newDirectoryOffset = parsed.signingBlockOffset + blockSize;
   const newSize = parsed.size + blockSize - parsed.signingBlockSize;
-  if (newDirectoryOffset >= 0xffffffff || newSize > MAX_APK_SIZE) fail('UNSUPPORTED_SIZE', 'Marked APK would exceed supported ZIP32 offsets or size.');
+  if (newDirectoryOffset >= 0xffffffff || newSize > MAX_APK_SIZE)
+    fail('UNSUPPORTED_SIZE', 'Marked APK would exceed supported ZIP32 offsets or size.');
   return { entries, blockSize, paddingLength, newDirectoryOffset };
 }
 
 /** Ensure every marker length through the requested maximum can be represented. */
-export async function assertApkMarkable(source: ByteSource, maxMarkerSize = MAX_MARKER_SIZE): Promise<void> {
-  if (!Number.isSafeInteger(maxMarkerSize) || maxMarkerSize < 1 || maxMarkerSize > MAX_MARKER_SIZE) {
+export async function assertApkMarkable(
+  source: ByteSource,
+  maxMarkerSize = MAX_MARKER_SIZE,
+): Promise<void> {
+  if (
+    !Number.isSafeInteger(maxMarkerSize) ||
+    maxMarkerSize < 1 ||
+    maxMarkerSize > MAX_MARKER_SIZE
+  ) {
     fail('MARKER_LIMIT', 'Marker capacity must be between 1 byte and 16 KiB.');
   }
   const parsed = await parseApk(source);
-  if (parsed.hasMarker) fail('ALREADY_MARKED', 'Upload an original APK without an InkParcel marker.');
+  if (parsed.hasMarker)
+    fail('ALREADY_MARKED', 'Upload an original APK without an InkParcel marker.');
   layout(parsed, maxMarkerSize);
   // An exactly aligned block needs no padding entry. One byte less can require an
   // extra page and entry, so checking only the longest marker is insufficient.
@@ -165,8 +224,13 @@ export async function assertApkMarkable(source: ByteSource, maxMarkerSize = MAX_
 }
 
 function plan(source: ByteSource, parsed: ParsedApk, marker?: Uint8Array): MarkedFile {
-  const { entries: originalEntries, blockSize, paddingLength, newDirectoryOffset } = layout(parsed, marker?.length);
-  const entries = originalEntries.map(pair => pair.bytes);
+  const {
+    entries: originalEntries,
+    blockSize,
+    paddingLength,
+    newDirectoryOffset,
+  } = layout(parsed, marker?.length);
+  const entries = originalEntries.map((pair) => pair.bytes);
   if (marker) entries.push(encodePair(APK_MARKER_ID, marker));
   if (paddingLength) {
     const padding = new Uint8Array(paddingLength);
@@ -183,7 +247,9 @@ function plan(source: ByteSource, parsed: ParsedApk, marker?: Uint8Array): Marke
   view(eocd).setUint32(16, newDirectoryOffset, true);
   const segments: Segment[] = [
     { offset: 0, length: parsed.signingBlockOffset },
-    { bytes: header }, ...entries.map(bytes => ({ bytes })), { bytes: footer },
+    { bytes: header },
+    ...entries.map((bytes) => ({ bytes })),
+    { bytes: footer },
     { offset: parsed.centralDirectoryOffset, length: parsed.centralDirectorySize },
     { bytes: eocd },
   ];
@@ -201,11 +267,12 @@ export const apkHandler: MarkerHandler = {
     }
     const stableMarker = marker.slice();
     const parsed = await parseApk(source);
-    if (parsed.hasMarker) fail('ALREADY_MARKED', 'Upload an original APK without an InkParcel marker.');
+    if (parsed.hasMarker)
+      fail('ALREADY_MARKED', 'Upload an original APK without an InkParcel marker.');
     return plan(source, parsed, stableMarker);
   },
   async extract(source) {
     const parsed = await parseApk(source);
-    return parsed.pairs.find(pair => pair.id === APK_MARKER_ID)?.bytes.slice(12) ?? null;
+    return parsed.pairs.find((pair) => pair.id === APK_MARKER_ID)?.bytes.slice(12) ?? null;
   },
 };
