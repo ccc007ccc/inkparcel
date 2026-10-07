@@ -290,12 +290,12 @@ function Setup() {
         </div>
         <Field
           label="新的管理路径"
-          hint="设置后 /admin 立即失效。请保存这个地址，不会在公开页面显示。"
+          hint="1–64 个英文字母、数字、下划线或连字符，例如 manage 或 /manage，无需包含横线。不可用 admin、api 等系统保留名称，不支持多级路径。设置后 /admin 失效，请保存新地址。"
         >
           <input
             required
-            pattern={'/[A-Za-z0-9][A-Za-z0-9_\\-]{7,63}'}
-            minLength={9}
+            pattern={'/?[A-Za-z0-9_\\-]{1,64}'}
+            minLength={1}
             maxLength={65}
             value={path}
             onChange={(event) => setPath(event.target.value)}

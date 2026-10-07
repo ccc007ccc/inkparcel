@@ -101,6 +101,11 @@ The bootstrap token can be removed after setup with
 `pnpm exec wrangler secret delete BOOTSTRAP_TOKEN`; the installation remains closed
 by database state. Do not remove or replace `APP_SECRET`.
 
+The management path may be `manage` or `/manage`: one segment of 1–64 ASCII
+letters, digits, underscores or hyphens, without a mandatory hyphen. Nested paths and
+reserved names such as admin, api and assets are rejected. Inputs show these rules.
+Save the complete returned management address after a change.
+
 ## Custom domain
 
 The domain's zone must be active in the same Cloudflare account. Add a Worker

@@ -56,7 +56,9 @@ publicApi.post('/access', async (c) => {
   const code = text(input.code, '提取码', 80);
   const match = /^([0-9a-f]{8})\.([A-Za-z0-9_-]{22})$/.exec(code);
   if (!match) fail(401, 'invalid_access', '用户 ID 或提取码错误');
-  const key = await c.env.DB.prepare('SELECT * FROM keys WHERE code = ? AND enabled = 1')
+  const key = await c.env.DB.prepare(
+    'SELECT * FROM keys WHERE code = ? AND enabled = 1 AND deleted = 0',
+  )
     .bind(match[1])
     .first<KeyRow>();
   if (!key) fail(401, 'invalid_access', '用户 ID 或提取码错误');
@@ -70,8 +72,8 @@ publicApi.post('/access', async (c) => {
   const timestamp = now();
   const user = await c.env.DB.prepare(
     `INSERT INTO users (id, user_id, first_seen_at, last_seen_at)
-    SELECT ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM keys WHERE id = ? AND enabled = 1)
-    ON CONFLICT(user_id) DO UPDATE SET last_seen_at = excluded.last_seen_at WHERE blocked = 0 RETURNING *`,
+    SELECT ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM keys WHERE id = ? AND enabled = 1 AND deleted = 0)
+    ON CONFLICT(user_id) DO UPDATE SET last_seen_at = excluded.last_seen_at WHERE blocked = 0 AND deleted = 0 RETURNING *`,
   )
     .bind(crypto.randomUUID(), subject, timestamp, timestamp, key.id)
     .first<UserRow>();

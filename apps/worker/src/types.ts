@@ -25,6 +25,7 @@ export interface KeyRow {
   secret_encrypted: string;
   secret_digest: string;
   enabled: number;
+  deleted: number;
   created_at: string;
 }
 export interface UserRow {
@@ -34,6 +35,7 @@ export interface UserRow {
   last_seen_at: string;
   notes: string;
   blocked: number;
+  deleted: number;
 }
 export interface FolderRow {
   id: string;

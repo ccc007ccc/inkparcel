@@ -70,6 +70,17 @@ scope. Interfaces must permit adding handlers without changing issuance logic.
 - Backups must cover D1, R2 and deployment secrets. Losing marker secrets or recipient
   mappings makes historical trace verification impossible.
 
+Deleting a user or key hides it from management lists and permanently revokes access,
+while preserving identity, secret material and issuance records for historical tracing.
+Deleting a key also removes file ACLs and folder defaults and frees a nondeleted-key
+slot; its secret cannot be reimported. Deleted user IDs cannot auto-register from old
+codes or be restored through PATCH. Use blocking/disabling for reversible actions.
+
+Admin paths accept one segment of 1–64 ASCII letters, digits, underscores or hyphens,
+without mandatory hyphens or initial letters. Trim surrounding whitespace, add a
+leading slash and reject reserved paths; see API for exact rules. Setup and settings
+must show format guidance.
+
 ## Files, folders and uploads
 
 - Folders form an acyclic parent tree. They organize files, not runtime permission

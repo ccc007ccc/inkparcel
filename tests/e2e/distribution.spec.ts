@@ -266,10 +266,10 @@ test('admin setup, multi-key upload, personal download and local trace', async (
   await page.getByRole('link', { name: '站点设置', exact: true }).click();
   await page.getByLabel('站点名称', { exact: true }).fill('InkParcel Preview');
   await page.getByLabel(/^IP 地址保留天数/).fill('0');
-  await page.getByLabel(/^管理入口/).fill('/control-renamed');
+  await page.getByLabel(/^管理入口/).fill('manage');
   page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: '保存站点设置', exact: true }).click();
-  await expect(page).toHaveURL(`${origin}/control-renamed#settings`);
+  await expect(page).toHaveURL(`${origin}/manage#settings`);
   await expect(page.getByLabel('站点名称', { exact: true })).toHaveValue('InkParcel Preview');
   expect((await page.request.get(adminPath)).status()).toBe(404);
   expect((await page.request.get(`${adminPath}/api/keys`)).status()).toBe(404);
@@ -285,6 +285,23 @@ test('admin setup, multi-key upload, personal download and local trace', async (
   await page.getByLabel('管理员密码', { exact: true }).fill(updatedPassword);
   await page.getByRole('button', { name: '登录管理后台', exact: true }).click();
   await expect(page.getByRole('heading', { name: '文件库', exact: true })).toBeVisible();
+  await page.getByRole('link', { name: '密钥与提取码', exact: true }).click();
+  page.once('dialog', (dialog) => dialog.dismiss());
+  await page.getByRole('button', { name: '删除 Early access', exact: true }).click();
+  await expect(page.getByRole('button', { name: '删除 Early access', exact: true })).toBeVisible();
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.getByRole('button', { name: '删除 Early access', exact: true }).click();
+  await expect(page.getByRole('button', { name: '删除 Early access', exact: true })).toHaveCount(0);
+  await page.getByRole('link', { name: '用户', exact: true }).click();
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.getByRole('button', { name: '删除 tester@example.test', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: '删除 tester@example.test', exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole('link', { name: '文件溯源', exact: true }).click();
+  await page.locator('input[type=file]').setInputFiles(downloadedPath);
+  await expect(page.getByText('tester@example.test', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText(/文件内容.*一致/).first()).toBeVisible();
   expect(failures).toEqual([]);
   await mobile.close();
   await recipient.close();

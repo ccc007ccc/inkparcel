@@ -731,3 +731,146 @@ describe('multipart lifecycle and retention', () => {
     ).toBe('deleted');
   });
 });
+
+describe('identity deletion preserves provenance', () => {
+  it('removes deleted identities from management, revokes access and preserves trace', async () => {
+    const adminCookie = await setup();
+    const first = await createKey(adminCookie);
+    const second = await createKey(adminCookie, 'Remaining key');
+    const folder = (
+      await json(
+        await call(
+          `${A}/api/folders`,
+          'POST',
+          {
+            name: 'Shared',
+            defaultKeyIds: [first.key.id, second.key.id],
+          },
+          adminCookie,
+        ),
+      )
+    ).folder;
+    const file = await upload(
+      adminCookie,
+      structuralApk(),
+      [first.key.id, second.key.id],
+      folder.id,
+    );
+    const user = await recipient(adminCookie, first.key.id);
+    const receipt = await json(
+      await call(`/api/files/${file.id}/downloads`, 'POST', {}, user.cookie),
+    );
+    const full = await (await call(receipt.url, 'GET', undefined, user.cookie)).arrayBuffer();
+    const source = blobSource(new Blob([full]));
+    const marker = new TextDecoder().decode((await apkHandler.extract(source))!);
+    const fingerprint = await fingerprintApk(source);
+    expect((await call(`${A}/api/keys/${first.key.id}`, 'DELETE')).status).toBe(401);
+    expect(
+      (await call(`${A}/api/users/${user.data.user.id}`, 'DELETE', undefined, user.cookie)).status,
+    ).toBe(401);
+    expect(
+      (await call(`${A}/api/keys/${first.key.id}`, 'DELETE', undefined, adminCookie)).status,
+    ).toBe(200);
+    const keys = await json(await call(`${A}/api/keys`, 'GET', undefined, adminCookie));
+    expect(keys.items.map((k: Json) => k.id)).toEqual([second.key.id]);
+    expect(
+      (await call(`${A}/api/keys/${first.key.id}`, 'PATCH', { enabled: true }, adminCookie)).status,
+    ).toBe(404);
+    expect(
+      (await call(`${A}/api/keys/${first.key.id}/code`, 'POST', { userId: 'other' }, adminCookie))
+        .status,
+    ).toBe(409);
+    expect(
+      (await call(receipt.url, 'GET', undefined, user.cookie, { Range: 'bytes=0-9' })).status,
+    ).toBe(401);
+    expect(
+      (await call('/api/access', 'POST', { userId: user.data.user.userId, code: user.code }))
+        .status,
+    ).not.toBe(200);
+    const files = await json(
+      await call(`${A}/api/files?folderId=${folder.id}`, 'GET', undefined, adminCookie),
+    );
+    expect(files.files[0].keyIds).toEqual([second.key.id]);
+    const folders = await json(await call(`${A}/api/folders`, 'GET', undefined, adminCookie));
+    expect(folders.items[0].defaultKeyIds).toEqual([second.key.id]);
+    expect(
+      (await call(`${A}/api/files/${file.id}`, 'PATCH', { keyIds: [first.key.id] }, adminCookie))
+        .status,
+    ).toBe(400);
+    const alternate = await recipient(adminCookie, second.key.id);
+    expect(
+      (await call(`${A}/api/users/${user.data.user.id}`, 'DELETE', undefined, adminCookie)).status,
+    ).toBe(200);
+    const users = await json(
+      await call(`${A}/api/users?q=recipient`, 'GET', undefined, adminCookie),
+    );
+    expect(users.total).toBe(0);
+    expect(users.items).toEqual([]);
+    expect(
+      (await call(`${A}/api/users/${user.data.user.id}`, 'PATCH', { blocked: false }, adminCookie))
+        .status,
+    ).toBe(404);
+    expect((await call('/api/session', 'GET', undefined, alternate.cookie)).status).toBe(401);
+    expect(
+      (
+        await call('/api/access', 'POST', {
+          userId: alternate.data.user.userId,
+          code: alternate.code,
+        })
+      ).status,
+    ).toBe(403);
+    const trace = await json(
+      await call(`${A}/api/trace`, 'POST', { marker, fingerprint }, adminCookie),
+    );
+    expect(trace.authentic).toBe(true);
+    expect(trace.contentMatch).toBe(true);
+    expect(trace.user.userId).toBe(user.data.user.userId);
+    expect(trace.key.id).toBe(first.key.id);
+    expect(
+      (await json(await call(`${A}/api/downloads`, 'GET', undefined, adminCookie))).total,
+    ).toBe(1);
+    // DELETE is safe to retry; neither historical material nor unrelated identities are removed.
+    expect(
+      (await call(`${A}/api/keys/${first.key.id}`, 'DELETE', undefined, adminCookie)).status,
+    ).toBe(200);
+    expect(
+      (await call(`${A}/api/users/${user.data.user.id}`, 'DELETE', undefined, adminCookie)).status,
+    ).toBe(200);
+  });
+});
+
+describe('custom management paths', () => {
+  it('normalizes short plain names and rejects reserved or ambiguous routes', async () => {
+    const cookie = await setup(' a ');
+    expect((await call('/a/api/settings', 'GET', undefined, cookie)).status).toBe(200);
+    for (const invalid of [
+      'admin',
+      '/API',
+      'assets',
+      '/downloads',
+      '/',
+      '//host',
+      '/a/b',
+      '../a',
+      '/a?x',
+      '/a#x',
+      '/a%2fb',
+      '/中文',
+      'a'.repeat(65),
+    ]) {
+      expect((await call('/a/api/settings', 'PATCH', { adminPath: invalid }, cookie)).status).toBe(
+        400,
+      );
+    }
+    for (const next of ['manage', '_private', '-private', '8']) {
+      const current = (await env.DB.prepare('SELECT admin_path FROM settings WHERE id = 1').first<{
+        admin_path: string;
+      }>())!.admin_path;
+      const result = await call(`${current}/api/settings`, 'PATCH', { adminPath: next }, cookie);
+      expect(result.status).toBe(200);
+      expect((await json(result)).adminPath).toBe('/' + next);
+      expect((await call(current)).status).toBe(404);
+      expect((await call('/' + next + '/api/settings', 'GET', undefined, cookie)).status).toBe(200);
+    }
+  });
+});

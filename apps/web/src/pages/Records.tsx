@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Ban, FileClock, Pencil, ShieldCheck, Users as UsersIcon, X } from 'lucide-react';
+import { Ban, FileClock, Pencil, ShieldCheck, Users as UsersIcon, X, Trash2 } from 'lucide-react';
 import {
   Alert,
   Empty,
@@ -16,6 +16,7 @@ import {
   date,
   message,
   patch,
+  remove,
   query,
   type Download,
   type Key,
@@ -58,6 +59,22 @@ export function UsersPage({ base, onRecords }: AdminProps & { onRecords: (user: 
     try {
       await patch(`${base}/api/users/${user.id}`, { blocked: !user.blocked });
       setVersion((value) => value + 1);
+    } catch (error) {
+      setError(message(error));
+    }
+  }
+  async function deleteUser(user: User) {
+    if (
+      !confirm(
+        `删除“${user.userId}”？该用户会从列表移除并永久停止访问，原用户 ID 不能再通过提取码自动登记。历史领取记录与溯源保留；如需以后恢复访问，请使用封禁。`,
+      )
+    )
+      return;
+    setError('');
+    try {
+      await remove(`${base}/api/users/${user.id}`);
+      if (result?.items.length === 1 && page > 1) setPage(page - 1);
+      else setVersion((value) => value + 1);
     } catch (error) {
       setError(message(error));
     }
@@ -144,6 +161,14 @@ export function UsersPage({ base, onRecords }: AdminProps & { onRecords: (user: 
                             onClick={() => void block(user)}
                           >
                             {user.blocked ? <ShieldCheck size={17} /> : <Ban size={17} />}
+                          </button>
+                          <button
+                            className="icon-button"
+                            title="删除用户"
+                            aria-label={`删除 ${user.userId}`}
+                            onClick={() => void deleteUser(user)}
+                          >
+                            <Trash2 size={17} />
                           </button>
                         </div>
                       </td>

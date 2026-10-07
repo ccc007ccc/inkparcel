@@ -8,8 +8,8 @@ These results do not establish Cloudflare Free CPU acceptance.
 ## Local acceptance
 
 - `pnpm check` passes formatting, relative documentation links/anchors, all TypeScript
-  checks, 55 package tests and the Vite/Worker production build with deployment dry run.
-  The package split is 29 binary, 13 Worker integration and 13 browser-logic tests.
+  checks, 57 package tests and the Vite/Worker production build with deployment dry run.
+  The package split is 29 binary, 15 Worker integration and 13 browser-logic tests.
 - Worker integration uses actual local Workerd with D1 migrations and R2 bindings:
   protected/concurrent setup, old-path 404, HTTPS/Origin enforcement, password/session
   invalidation, cross-key isolation, user controls, folders, 100-key bulk ACL updates,
@@ -40,6 +40,13 @@ These results do not establish Cloudflare Free CPU acceptance.
 Local build tools run inside the `dev` Distrobox container. Signature fixtures and
 test signing keys are generated under ignored `target/`; the generation and checking
 scripts are committed, so the evidence can be reproduced without private inputs.
+
+The identity-deletion and short-admin-path batch passed `pnpm check` and Chromium E2E.
+Coverage includes unauthorized deletion, post-deletion login/range revocation, list
+and ACL cleanup, rejected restoration, historical tracing, short-path normalization,
+reserved paths and retired-path 404. Browser checks cover cancel/confirm deletion,
+entering `manage` directly and tracing after identity deletion. Migration
+`0002_identity_deletion.sql` was applied against real local D1.
 
 ## Continuous integration
 

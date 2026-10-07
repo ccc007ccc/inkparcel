@@ -57,7 +57,8 @@ export async function recipientSession(c: Ctx) {
     c.env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(session.uid).first<UserRow>(),
     c.env.DB.prepare('SELECT * FROM keys WHERE id = ?').bind(session.kid).first<KeyRow>(),
   ]);
-  if (!user || user.blocked || !key || !key.enabled) fail(401, 'access_revoked', '访问权限已停用');
+  if (!user || user.deleted || user.blocked || !key || key.deleted || !key.enabled)
+    fail(401, 'access_revoked', '访问权限已停用');
   c.set('session', session);
   c.set('user', user);
   c.set('key', key);

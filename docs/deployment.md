@@ -67,6 +67,8 @@ pnpm exec wrangler secret put BOOTSTRAP_TOKEN
 
 完成后可执行 `pnpm exec wrangler secret delete BOOTSTRAP_TOKEN` 移除初始化令牌；数据库状态仍保证初始化关闭。不要删除或替换 `APP_SECRET`。
 
+管理路径可以输入 `manage` 或 `/manage`：名称为 1–64 个英文字母、数字、下划线或连字符，无需包含横线，不支持多级路径。不要使用 admin、api、assets 等系统保留名称；输入框会显示要求。入口变更后请保存返回的完整管理地址。
+
 ## 自定义域名
 
 域名所在区域需在同一 Cloudflare 账户中处于有效状态。在部署配置添加 Worker 自定义域名路由，例如：

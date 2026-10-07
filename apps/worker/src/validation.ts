@@ -108,13 +108,19 @@ export function keyIds(value: unknown): string[] {
   return list;
 }
 export function adminPath(value: unknown): string {
-  if (typeof value !== 'string' || !/^\/[a-zA-Z0-9][a-zA-Z0-9_-]{7,63}$/.test(value))
-    fail(400, 'invalid_admin_path', '管理路径需要 8–64 个字母、数字、下划线或连字符');
+  if (typeof value !== 'string') fail(400, 'invalid_admin_path', '管理路径格式无效');
+  const path = value.trim().startsWith('/') ? value.trim() : `/${value.trim()}`;
+  if (!/^\/[a-zA-Z0-9_-]{1,64}$/.test(path))
+    fail(
+      400,
+      'invalid_admin_path',
+      '管理路径需为 1–64 个英文字母、数字、下划线或连字符，例如 /manage；不支持多级路径',
+    );
   if (
-    ['/admin', '/api', '/assets', '/favicon', '/robots', '/downloads'].includes(value.toLowerCase())
+    ['/admin', '/api', '/assets', '/favicon', '/robots', '/downloads'].includes(path.toLowerCase())
   )
-    fail(400, 'reserved_admin_path', '管理路径与保留路径冲突');
-  return value;
+    fail(400, 'reserved_admin_path', '该路径由系统保留，请换一个名称（例如 /manage）');
+  return path;
 }
 export function fingerprint(value: unknown): string {
   if (typeof value !== 'string' || !/^[0-9a-f]{64}$/.test(value))

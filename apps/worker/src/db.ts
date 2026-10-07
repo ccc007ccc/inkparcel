@@ -96,7 +96,7 @@ export function downloadObject(row: DownloadRow & { user_name?: string; key_name
 export async function requireKeys(db: D1Database, ids: string[]) {
   if (!ids.length) return;
   const rows = await db
-    .prepare(`SELECT id FROM keys WHERE id IN (${ids.map(() => '?').join(',')})`)
+    .prepare(`SELECT id FROM keys WHERE deleted = 0 AND id IN (${ids.map(() => '?').join(',')})`)
     .bind(...ids)
     .all();
   if (rows.results.length !== ids.length) fail(400, 'unknown_key', '选择的密钥不存在');

@@ -340,11 +340,14 @@ export function SettingsPage({ base }: AdminProps) {
                   onChange={(event) => setName(event.target.value)}
                 />
               </Field>
-              <Field label="管理入口" hint="修改后旧路径返回 404。请自行保存新的管理地址。">
+              <Field
+                label="管理入口"
+                hint="1–64 个英文字母、数字、下划线或连字符，例如 manage 或 /manage，无需包含横线。不可用 admin、api 等系统保留名称，不支持多级路径。修改后旧路径返回 404，请保存新地址。"
+              >
                 <input
                   required
-                  pattern={'/[A-Za-z0-9][A-Za-z0-9_\\-]{7,63}'}
-                  minLength={9}
+                  pattern={'/?[A-Za-z0-9_\\-]{1,64}'}
+                  minLength={1}
                   maxLength={65}
                   value={path}
                   onChange={(event) => setPath(event.target.value)}

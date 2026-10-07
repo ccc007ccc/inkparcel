@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { KeyRound, Plus, Ticket, Pencil, Power, ShieldCheck } from 'lucide-react';
+import { KeyRound, Plus, Ticket, Pencil, Power, ShieldCheck, Trash2 } from 'lucide-react';
 import {
   Alert,
   CopyButton,
@@ -10,7 +10,7 @@ import {
   Spinner,
   StatusBadge,
 } from '../components';
-import { api, date, message, patch, post, type Key } from '../lib';
+import { api, date, message, patch, post, remove, type Key } from '../lib';
 import type { AdminProps } from '../Admin';
 export function KeyManager({ base }: AdminProps) {
   const [keys, setKeys] = useState<Key[]>();
@@ -34,6 +34,21 @@ export function KeyManager({ base }: AdminProps) {
     setError('');
     try {
       await patch(`${base}/api/keys/${key.id}`, { enabled: !key.enabled });
+      load();
+    } catch (error) {
+      setError(message(error));
+    }
+  }
+  async function deleteKey(key: Key) {
+    if (
+      !confirm(
+        `删除“${key.name}”？该密钥会从列表移除，提取码和下载永久停用，文件授权及文件夹默认选择会清除。历史记录与溯源保留，不能重新启用。`,
+      )
+    )
+      return;
+    setError('');
+    try {
+      await remove(`${base}/api/keys/${key.id}`);
       load();
     } catch (error) {
       setError(message(error));
@@ -104,6 +119,14 @@ export function KeyManager({ base }: AdminProps) {
                 >
                   <Power size={17} />
                 </button>
+                <button
+                  className="icon-button"
+                  aria-label={`删除 ${key.name}`}
+                  title="删除密钥"
+                  onClick={() => void deleteKey(key)}
+                >
+                  <Trash2 size={17} />
+                </button>
               </div>
             </article>
           ))}
@@ -115,7 +138,7 @@ export function KeyManager({ base }: AdminProps) {
       )}
       <div className="inline-note">
         <ShieldCheck size={19} />
-        <p>停用密钥会停止新验证与下载。已签发文件仍可溯源，历史密钥会保留。</p>
+        <p>停用可以恢复；删除会移出列表并永久停用。两种操作都保留历史溯源所需资料。</p>
       </div>
       {creating && (
         <KeyForm

@@ -36,6 +36,12 @@ names and version identities remain for tracing. Download records mean issuance
 or transfer initiation, not confirmation that a browser saved the whole file.
 Keep the original APK and the applicable backup if you need to restore downloads.
 
+User and key lists provide deletion buttons with impact confirmation. Deletion removes
+an identity from management and permanently disables access; it is not erasure of
+personal data or provenance. Historical records remain and editing cannot restore the
+identity. Key deletion clears file permissions and folder defaults. A deleted user ID
+cannot auto-register with an old code. Use blocking/disabling if access may need restoring.
+
 ## Administrator access
 
 Change the password through Settings while authenticated. Enter the current
@@ -148,3 +154,7 @@ observability, and application failures log an error class rather than body data
 Reproduce problems using generic fixtures where possible. Preserve the release,
 request outcome and nonsecret resource state needed to distinguish an unsupported
 APK, an authorization rejection and an infrastructure failure.
+
+Identity deletion requires applying `0002_identity_deletion.sql` before deploying the
+matching Worker and frontend. The migration only adds defaulted deletion flags and
+indexes; it does not delete existing users, keys or records.

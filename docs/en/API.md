@@ -95,6 +95,22 @@ All following paths are prefixed with `A/api` and require admin authentication.
 - The current installation supports 100 keys and 1000 folders. ACL updates use bulk
   SQL within a transaction, including when selecting all 100 keys.
 
+### Deletion and management paths
+
+`DELETE A/api/keys/:id` and `DELETE A/api/users/:id` require an admin session and
+same-origin Origin, return `{ok:true}`, and are retryable. Soft-deleted identities
+are omitted from normal lists. Key deletion permanently disables access and removes
+file ACLs and folder defaults; user deletion permanently blocks the identity so old
+codes cannot automatically register it again. Issuance records, identity mappings and
+key material remain for tracing. PATCH cannot restore deleted identities. The
+100-key limit counts only nondeleted keys; importing a deleted key's secret is still rejected.
+
+Setup and settings accept a single adminPath segment of 1–64 ASCII letters, digits,
+underscores or hyphens. Leading/trailing whitespace is trimmed and a leading slash is
+added, for example `manage` becomes `/manage`. Hyphens are optional. Unicode names,
+nested paths, query strings and fragments are unsupported. Case-insensitive reserved
+names are `admin`, `api`, `assets`, `favicon`, `robots` and `downloads`.
+
 ## Marking package
 
 Binary parsing, supported signatures and fingerprint normalization are defined in

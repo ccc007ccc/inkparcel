@@ -78,7 +78,7 @@ admin.post('/logout', (c) => {
 });
 admin.get('/keys', async (c) => {
   const rows = await c.env.DB.prepare(
-    'SELECT * FROM keys ORDER BY created_at DESC, id',
+    'SELECT * FROM keys WHERE deleted = 0 ORDER BY created_at DESC, id',
   ).all<KeyRow>();
   return c.json({ items: rows.results.map(keyObject) });
 });
@@ -86,7 +86,9 @@ admin.post('/keys', async (c) => {
   const input = await body(c);
   fields(input, ['name', 'secret']);
   const displayName = text(input.name, '密钥名称');
-  const count = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM keys').first<{ n: number }>();
+  const count = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM keys WHERE deleted = 0').first<{
+    n: number;
+  }>();
   if (count!.n >= 100) fail(409, 'key_limit', '最多支持 100 把密钥');
   const secret =
     input.secret === undefined
@@ -118,15 +120,26 @@ admin.patch('/keys/:id', async (c) => {
   const row = await c.env.DB.prepare('SELECT * FROM keys WHERE id = ?')
     .bind(id(c.req.param('id')))
     .first<KeyRow>();
-  if (!row) fail(404, 'key_not_found', '密钥不存在');
+  if (!row || row.deleted) fail(404, 'key_not_found', '密钥不存在');
   const displayName = input.name === undefined ? row.name : text(input.name, '密钥名称');
   const enabled = input.enabled === undefined ? row.enabled : Number(boolean(input.enabled));
   const updated = await c.env.DB.prepare(
-    'UPDATE keys SET name = ?, enabled = ? WHERE id = ? RETURNING *',
+    'UPDATE keys SET name = ?, enabled = ? WHERE id = ? AND deleted = 0 RETURNING *',
   )
     .bind(displayName, enabled, row.id)
     .first<KeyRow>();
-  return c.json({ key: keyObject(updated!) });
+  if (!updated) fail(404, 'key_not_found', '密钥不存在');
+  return c.json({ key: keyObject(updated) });
+});
+admin.delete('/keys/:id', async (c) => {
+  const keyId = id(c.req.param('id'));
+  const result = await c.env.DB.batch([
+    c.env.DB.prepare('UPDATE keys SET deleted = 1, enabled = 0 WHERE id = ?').bind(keyId),
+    c.env.DB.prepare('DELETE FROM file_keys WHERE key_id = ?').bind(keyId),
+    c.env.DB.prepare('DELETE FROM folder_keys WHERE key_id = ?').bind(keyId),
+  ]);
+  if (!result[0].meta.changes) fail(404, 'key_not_found', '密钥不存在');
+  return c.json({ ok: true });
 });
 admin.post('/keys/:id/code', async (c) => {
   const input = await body(c);
@@ -135,7 +148,7 @@ admin.post('/keys/:id/code', async (c) => {
   const row = await c.env.DB.prepare('SELECT * FROM keys WHERE id = ?')
     .bind(id(c.req.param('id')))
     .first<KeyRow>();
-  if (!row || !row.enabled) fail(409, 'key_unavailable', '密钥不存在或已停用');
+  if (!row || row.deleted || !row.enabled) fail(409, 'key_unavailable', '密钥不存在或已停用');
   return c.json({
     userId: subject,
     code: await accessCode(
@@ -292,10 +305,10 @@ admin.get('/users', async (c) => {
   const search = like(query(c));
   const [rows, count] = await c.env.DB.batch([
     c.env.DB.prepare(
-      "SELECT * FROM users WHERE user_id LIKE ? ESCAPE '\\' OR notes LIKE ? ESCAPE '\\' ORDER BY last_seen_at DESC, id LIMIT ? OFFSET ?",
+      "SELECT * FROM users WHERE deleted = 0 AND (user_id LIKE ? ESCAPE '\\' OR notes LIKE ? ESCAPE '\\') ORDER BY last_seen_at DESC, id LIMIT ? OFFSET ?",
     ).bind(search, search, pageSize, offset),
     c.env.DB.prepare(
-      "SELECT COUNT(*) AS n FROM users WHERE user_id LIKE ? ESCAPE '\\' OR notes LIKE ? ESCAPE '\\'",
+      "SELECT COUNT(*) AS n FROM users WHERE deleted = 0 AND (user_id LIKE ? ESCAPE '\\' OR notes LIKE ? ESCAPE '\\')",
     ).bind(search, search),
   ]);
   return c.json({
@@ -311,15 +324,23 @@ admin.patch('/users/:id', async (c) => {
   const row = await c.env.DB.prepare('SELECT * FROM users WHERE id = ?')
     .bind(id(c.req.param('id')))
     .first<UserRow>();
-  if (!row) fail(404, 'user_not_found', '用户不存在');
+  if (!row || row.deleted) fail(404, 'user_not_found', '用户不存在');
   const notes = input.notes === undefined ? row.notes : noteText(input.notes);
   const blocked = input.blocked === undefined ? row.blocked : Number(boolean(input.blocked));
   const updated = await c.env.DB.prepare(
-    'UPDATE users SET notes = ?, blocked = ? WHERE id = ? RETURNING *',
+    'UPDATE users SET notes = ?, blocked = ? WHERE id = ? AND deleted = 0 RETURNING *',
   )
     .bind(notes, blocked, row.id)
     .first<UserRow>();
-  return c.json({ user: userObject(updated!) });
+  if (!updated) fail(404, 'user_not_found', '用户不存在');
+  return c.json({ user: userObject(updated) });
+});
+admin.delete('/users/:id', async (c) => {
+  const result = await c.env.DB.prepare('UPDATE users SET deleted = 1, blocked = 1 WHERE id = ?')
+    .bind(id(c.req.param('id')))
+    .run();
+  if (!result.meta.changes) fail(404, 'user_not_found', '用户不存在');
+  return c.json({ ok: true });
 });
 admin.get('/downloads', async (c) => {
   const { page, pageSize, offset } = pagination(c);
