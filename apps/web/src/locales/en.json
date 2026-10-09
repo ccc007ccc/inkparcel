@@ -438,5 +438,7 @@
   "最多 8 条，仅填写 HTTPS 域名，不含路径。当前访问域名始终可用。CDN 必须关闭 API 和下载缓存，并透传 Cookie、查询参数及 Range 请求头。": "Up to 8 HTTPS origins, without paths. The current origin always remains available. Disable CDN caching for APIs and downloads, and forward cookies, query parameters and Range headers.",
   "error.invalid_download_sources": "Enter up to 8 unique HTTPS origins without paths, credentials or query parameters",
   "error.invalid_download_source": "Download source unavailable. Refresh the page and try again",
-  "error.invalid_download_token": "Download link expired or invalid. Choose a download source again"
+  "error.invalid_download_token": "Download link expired or invalid. Choose a download source again",
+  "显示下载源域名": "Show download source domains",
+  "关闭后，下载选择弹窗只显示线路名称。": "When turned off, the download chooser shows only source names."
 }

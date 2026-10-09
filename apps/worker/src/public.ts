@@ -27,6 +27,7 @@ publicApi.get('/site', (c) =>
     iconUrl: iconUrl(c.get('settings')?.icon_version),
     hasCustomIcon: !!c.get('settings')?.icon_version,
     downloadSources: downloadSources(c),
+    showDownloadSourceDomains: c.get('settings')?.show_download_source_domains !== 0,
   }),
 );
 publicApi.on(['GET', 'HEAD'], '/site-icon', async (c) => {

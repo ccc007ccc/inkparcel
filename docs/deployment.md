@@ -81,7 +81,7 @@ pnpm exec wrangler secret put BOOTSTRAP_TOKEN
 
 ## CDN 与多个下载域名
 
-升级现有实例时，先备份 D1，应用迁移（含 `0005_download_sources.sql`），再部署已检查版本。从直连域名登录后台，在「站点设置 → 下载源与可信域名」添加例如「直连」`https://files.example.com` 和「CDN 加速」`https://cdn.example.com`，保存后生效。这些域名必须由你管理，并指向同一 Worker 实例。当前浏览器域名始终可用；有多个域名时，点击下载会显示线路选择弹窗。清除配置恢复默认单域名行为。
+升级现有实例时，先备份 D1，应用迁移（含 `0005_download_sources.sql`），再部署已检查版本。从直连域名登录后台，在「站点设置 → 下载源与可信域名」添加例如「直连」`https://files.example.com` 和「CDN 加速」`https://cdn.example.com`，保存后生效。这些域名必须由你管理，并指向同一 Worker 实例。当前浏览器域名始终可用；有多个域名时，点击下载会显示线路选择弹窗。清除配置恢复默认单域名行为。如需弹窗只显示线路名称，关闭该区域的“显示下载源域名”并保存；此展示选项需要迁移 `0006_download_source_display.sql`。
 
 使用腾讯云 EdgeOne 等反向代理 CDN 时：
 

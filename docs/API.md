@@ -8,17 +8,17 @@
 
 下文 `A` 表示配置的管理路径（例如 `/control-random`），不得编译进前端静态资源，也不得通过公开发现接口返回。
 
-| 方法 / 路径         | 请求                                                  | 响应                                                                             |
-| ------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------- |
-| GET `/api/site`     | —                                                     | `{name, initialized, stealthMode, iconUrl, hasCustomIcon, downloadSources}`      |
-| GET `/api/setup`    | —                                                     | 初始化前返回 `{available:true}`，之后为 404                                      |
-| POST `/api/setup`   | `{bootstrapToken,passwordKey,passwordSalt,adminPath}` | `{adminPath}` 与管理员 Cookie                                                    |
-| GET `A/api/auth`    | —                                                     | `{authenticated,passwordSalt,kdf:{algorithm:"PBKDF2-SHA256",iterations:600000}}` |
-| POST `A/api/login`  | `{passwordKey}`                                       | `{ok:true}` 与管理员 Cookie                                                      |
-| POST `A/api/logout` | —                                                     | `{ok:true}` 并清除管理员 Cookie                                                  |
-| POST `/api/access`  | `{userId,code}`                                       | `{user:{id,userId},key:{id,name}}` 与领取者 Cookie                               |
-| GET `/api/session`  | —                                                     | 同上会话对象，或 401                                                             |
-| POST `/api/logout`  | —                                                     | `{ok:true}` 并清除领取者 Cookie                                                  |
+| 方法 / 路径         | 请求                                                  | 响应                                                                                                   |
+| ------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| GET `/api/site`     | —                                                     | `{name, initialized, stealthMode, iconUrl, hasCustomIcon, downloadSources, showDownloadSourceDomains}` |
+| GET `/api/setup`    | —                                                     | 初始化前返回 `{available:true}`，之后为 404                                                            |
+| POST `/api/setup`   | `{bootstrapToken,passwordKey,passwordSalt,adminPath}` | `{adminPath}` 与管理员 Cookie                                                                          |
+| GET `A/api/auth`    | —                                                     | `{authenticated,passwordSalt,kdf:{algorithm:"PBKDF2-SHA256",iterations:600000}}`                       |
+| POST `A/api/login`  | `{passwordKey}`                                       | `{ok:true}` 与管理员 Cookie                                                                            |
+| POST `A/api/logout` | —                                                     | `{ok:true}` 并清除管理员 Cookie                                                                        |
+| POST `/api/access`  | `{userId,code}`                                       | `{user:{id,userId},key:{id,name}}` 与领取者 Cookie                                                     |
+| GET `/api/session`  | —                                                     | 同上会话对象，或 401                                                                                   |
+| POST `/api/logout`  | —                                                     | `{ok:true}` 并清除领取者 Cookie                                                                        |
 
 `passwordKey` 与 `passwordSalt` 使用无填充 base64url，分别包含 32 字节派生值和至少 16 字节随机盐。前端通过 WebCrypto PBKDF2-SHA256 派生密码密钥，迭代 600,000 次，输出 256 位。
 
@@ -38,6 +38,8 @@
 
 ### 下载源与跨域下载
 
+`showDownloadSourceDomains` 为布尔值，默认 true，由站点公开配置与设置接口返回；管理员 PATCH 可修改，省略保留原值。false 时下载弹窗只显示线路名称，不显示域名文字，下载行为保持一致；浏览器仍可获取源地址，后台仍可编辑。需要迁移 `0006_download_source_display.sql`。
+
 `downloadSources` 是 `{name,origin}[]`，默认 `[]`，最多 8 项。名称 trim/NFC 后为 1–40 字符；地址最多 256 字符，必须为 HTTPS origin，可带根路径 `/`，规范化为 `URL.origin` 后去重。拒绝凭据、路径、查询串、片段及通配符；仅 `ENVIRONMENT=local` 时接受 HTTP 回环源。PATCH 省略时保留，空数组清除，非法值返回 400 `invalid_download_sources`。该配置需要迁移 `0005_download_sources.sql`。
 
 写请求的 Origin 必须精确匹配请求 origin 或上述配置；缺失、`null` 和未配置域名均返回 403 `origin_rejected`。如有 Sec-Fetch-Site，只接受 `same-origin`/`none`，不开放 CORS，不读取转发头放宽校验。CDN 必须把浏览器头原样回源。
@@ -50,31 +52,31 @@ URL 凭证是短时持有者权限，不绑定浏览器 Cookie，也不要求 Wo
 
 以下路径均以 `A/api` 为前缀，并要求管理员认证。
 
-| 方法 / 路径                      | 请求                                                                    | 响应                                                                                     |
-| -------------------------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| GET `/keys`                      | —                                                                       | `{items:Key[]}`                                                                          |
-| POST `/keys`                     | `{name,secret?}`，省略 secret 时生成 32 字节秘密值                      | `{key:Key,secret}`，秘密值仅显示一次                                                     |
-| PATCH `/keys/:id`                | `{name?,enabled?}`                                                      | `{key:Key}`                                                                              |
-| POST `/keys/:id/code`            | `{userId}`                                                              | `{userId,code}`                                                                          |
-| GET `/folders`                   | —                                                                       | `{items:Folder[]}`                                                                       |
-| POST `/folders`                  | `{name,parentId?,defaultKeyIds?}`                                       | `{folder:Folder}`                                                                        |
-| PATCH `/folders/:id`             | `{name?,parentId?,defaultKeyIds?}`                                      | `{folder:Folder}`                                                                        |
-| DELETE `/folders/:id`            | 仅允许空文件夹                                                          | `{ok:true}`                                                                              |
-| GET `/files`                     | 可选 `folderId`、`page`、`q`                                            | `{files:AdminFile[],total,page,pageSize}`                                                |
-| PATCH `/files/:id`               | `{name?,folderId?,keyIds?}`                                             | `{file:AdminFile}`                                                                       |
-| DELETE `/files/:id`              | 退役元数据并移除 R2 对象                                                | `{ok:true}`                                                                              |
-| POST `/uploads`                  | `{fileName,size,folderId?,keyIds,fingerprint}`                          | `{fileId,partSize,partCount}`                                                            |
-| GET `/uploads/:id`               | —                                                                       | `{fileId,partSize,partCount,parts:[{partNumber,etag,size}]}`                             |
-| PUT `/uploads/:id/parts/:number` | 二进制分片请求体                                                        | `{partNumber,etag,size}`                                                                 |
-| POST `/uploads/:id/complete`     | `{}`                                                                    | `{file:AdminFile}`                                                                       |
-| DELETE `/uploads/:id`            | 中止未完成上传                                                          | `{ok:true}`                                                                              |
-| GET `/users`                     | 可选 `q`、`page`                                                        | `{items:User[],total,page,pageSize}`                                                     |
-| PATCH `/users/:id`               | `{notes?,blocked?}`                                                     | `{user:User}`                                                                            |
-| GET `/downloads`                 | 可选 `userId`、`keyId`、`fileId`、`q`、`page`                           | `{items:Download[],total,page,pageSize}`                                                 |
-| POST `/trace`                    | `{marker,fingerprint?}`                                                 | `{authentic:true,contentMatch,record,user,key,file,signedName}`                          |
-| GET `/settings`                  | —                                                                       | `{siteName,adminPath,ipRetentionDays,stealthMode,iconUrl,hasCustomIcon,downloadSources}` |
-| PATCH `/settings`                | `{siteName?,adminPath?,ipRetentionDays?,stealthMode?,downloadSources?}` | 更新后的设置                                                                             |
-| POST `/password`                 | `{currentPasswordKey,passwordKey,passwordSalt}`                         | `{ok:true}`，原管理员会话失效                                                            |
+| 方法 / 路径                      | 请求                                                                                               | 响应                                                                                                               |
+| -------------------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| GET `/keys`                      | —                                                                                                  | `{items:Key[]}`                                                                                                    |
+| POST `/keys`                     | `{name,secret?}`，省略 secret 时生成 32 字节秘密值                                                 | `{key:Key,secret}`，秘密值仅显示一次                                                                               |
+| PATCH `/keys/:id`                | `{name?,enabled?}`                                                                                 | `{key:Key}`                                                                                                        |
+| POST `/keys/:id/code`            | `{userId}`                                                                                         | `{userId,code}`                                                                                                    |
+| GET `/folders`                   | —                                                                                                  | `{items:Folder[]}`                                                                                                 |
+| POST `/folders`                  | `{name,parentId?,defaultKeyIds?}`                                                                  | `{folder:Folder}`                                                                                                  |
+| PATCH `/folders/:id`             | `{name?,parentId?,defaultKeyIds?}`                                                                 | `{folder:Folder}`                                                                                                  |
+| DELETE `/folders/:id`            | 仅允许空文件夹                                                                                     | `{ok:true}`                                                                                                        |
+| GET `/files`                     | 可选 `folderId`、`page`、`q`                                                                       | `{files:AdminFile[],total,page,pageSize}`                                                                          |
+| PATCH `/files/:id`               | `{name?,folderId?,keyIds?}`                                                                        | `{file:AdminFile}`                                                                                                 |
+| DELETE `/files/:id`              | 退役元数据并移除 R2 对象                                                                           | `{ok:true}`                                                                                                        |
+| POST `/uploads`                  | `{fileName,size,folderId?,keyIds,fingerprint}`                                                     | `{fileId,partSize,partCount}`                                                                                      |
+| GET `/uploads/:id`               | —                                                                                                  | `{fileId,partSize,partCount,parts:[{partNumber,etag,size}]}`                                                       |
+| PUT `/uploads/:id/parts/:number` | 二进制分片请求体                                                                                   | `{partNumber,etag,size}`                                                                                           |
+| POST `/uploads/:id/complete`     | `{}`                                                                                               | `{file:AdminFile}`                                                                                                 |
+| DELETE `/uploads/:id`            | 中止未完成上传                                                                                     | `{ok:true}`                                                                                                        |
+| GET `/users`                     | 可选 `q`、`page`                                                                                   | `{items:User[],total,page,pageSize}`                                                                               |
+| PATCH `/users/:id`               | `{notes?,blocked?}`                                                                                | `{user:User}`                                                                                                      |
+| GET `/downloads`                 | 可选 `userId`、`keyId`、`fileId`、`q`、`page`                                                      | `{items:Download[],total,page,pageSize}`                                                                           |
+| POST `/trace`                    | `{marker,fingerprint?}`                                                                            | `{authentic:true,contentMatch,record,user,key,file,signedName}`                                                    |
+| GET `/settings`                  | —                                                                                                  | `{siteName,adminPath,ipRetentionDays,stealthMode,iconUrl,hasCustomIcon,downloadSources,showDownloadSourceDomains}` |
+| PATCH `/settings`                | `{siteName?,adminPath?,ipRetentionDays?,stealthMode?,downloadSources?,showDownloadSourceDomains?}` | 更新后的设置                                                                                                       |
+| POST `/password`                 | `{currentPasswordKey,passwordKey,passwordSalt}`                                                    | `{ok:true}`，原管理员会话失效                                                                                      |
 
 - `Key`：`{id,code,name,enabled,createdAt}`。导入秘密值使用 32 字节 base64url。
 - `Folder`：`{id,name,parentId,defaultKeyIds}`。

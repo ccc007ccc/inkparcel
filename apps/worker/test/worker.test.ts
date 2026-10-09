@@ -205,8 +205,34 @@ describe('CDN sources and scoped downloads', () => {
       adminCookie,
     );
     expect((await json(saved)).downloadSources).toEqual(sources);
+    expect((await json(await call('/api/site'))).showDownloadSourceDomains).toBe(true);
+    expect(
+      (
+        await call(
+          `${A}/api/settings`,
+          'PATCH',
+          { showDownloadSourceDomains: 'false' },
+          adminCookie,
+        )
+      ).status,
+    ).toBe(400);
+    expect(
+      (await call(`${A}/api/settings`, 'PATCH', { showDownloadSourceDomains: false })).status,
+    ).toBe(401);
+    const hidden = await call(
+      `${A}/api/settings`,
+      'PATCH',
+      { showDownloadSourceDomains: false },
+      adminCookie,
+    );
+    expect((await json(hidden)).showDownloadSourceDomains).toBe(false);
     await call(`${A}/api/settings`, 'PATCH', { siteName: 'Files' }, adminCookie);
     expect((await json(await call('/api/site'))).downloadSources).toEqual(sources);
+    expect((await json(await call('/api/site'))).showDownloadSourceDomains).toBe(false);
+    expect(
+      (await json(await call(`${A}/api/settings`, 'GET', undefined, adminCookie)))
+        .showDownloadSourceDomains,
+    ).toBe(false);
   });
   it('accepts configured proxy origins without trusting forwarded hosts or enabling cross-site mutations', async () => {
     const adminCookie = await setup();

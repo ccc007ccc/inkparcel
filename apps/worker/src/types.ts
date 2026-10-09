@@ -20,6 +20,7 @@ export interface SettingsRow {
   ip_retention_days: number;
   created_at: string;
   download_sources: string;
+  show_download_source_domains: number;
 }
 export interface DownloadSource {
   name: string;

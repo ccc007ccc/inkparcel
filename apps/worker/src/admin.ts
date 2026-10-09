@@ -438,12 +438,24 @@ admin.get('/settings', (c) => {
     adminPath: s.admin_path,
     ipRetentionDays: s.ip_retention_days,
     downloadSources: downloadSources(c),
+    showDownloadSourceDomains: !!s.show_download_source_domains,
   });
 });
 admin.patch('/settings', async (c) => {
   const input = await body(c);
-  fields(input, ['siteName', 'adminPath', 'ipRetentionDays', 'stealthMode', 'downloadSources']);
+  fields(input, [
+    'siteName',
+    'adminPath',
+    'ipRetentionDays',
+    'stealthMode',
+    'downloadSources',
+    'showDownloadSourceDomains',
+  ]);
   const current = c.get('settings')!;
+  const showDownloadSourceDomains =
+    input.showDownloadSourceDomains === undefined
+      ? !!current.show_download_source_domains
+      : boolean(input.showDownloadSourceDomains);
   const sources =
     input.downloadSources === undefined
       ? downloadSources(c)
@@ -458,9 +470,16 @@ admin.patch('/settings', async (c) => {
       ? current.ip_retention_days
       : integer(input.ipRetentionDays, 0, 3650);
   await c.env.DB.prepare(
-    'UPDATE settings SET site_name = ?, admin_path = ?, ip_retention_days = ?, stealth_mode = ?, download_sources = ? WHERE id = 1',
+    'UPDATE settings SET site_name = ?, admin_path = ?, ip_retention_days = ?, stealth_mode = ?, download_sources = ?, show_download_source_domains = ? WHERE id = 1',
   )
-    .bind(siteName, path, retention, Number(stealthMode), JSON.stringify(sources))
+    .bind(
+      siteName,
+      path,
+      retention,
+      Number(stealthMode),
+      JSON.stringify(sources),
+      Number(showDownloadSourceDomains),
+    )
     .run();
   if (retention === 0)
     await c.env.DB.prepare('UPDATE downloads SET ip = NULL WHERE ip IS NOT NULL').run();
@@ -470,6 +489,7 @@ admin.patch('/settings', async (c) => {
     ipRetentionDays: retention,
     stealthMode,
     downloadSources: sources,
+    showDownloadSourceDomains,
     iconUrl: iconUrl(current.icon_version),
     hasCustomIcon: !!current.icon_version,
   });

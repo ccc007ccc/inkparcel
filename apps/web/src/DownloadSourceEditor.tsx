@@ -5,9 +5,13 @@ import type { DownloadSource } from './lib';
 export function DownloadSourceEditor({
   value,
   onChange,
+  showDomains,
+  onShowDomainsChange,
 }: {
   value: DownloadSource[];
   onChange: (value: DownloadSource[]) => void;
+  showDomains: boolean;
+  onShowDomainsChange: (value: boolean) => void;
 }) {
   function update(index: number, patch: Partial<DownloadSource>) {
     onChange(value.map((source, i) => (i === index ? { ...source, ...patch } : source)));
@@ -15,6 +19,13 @@ export function DownloadSourceEditor({
   return (
     <fieldset className="download-source-editor stack">
       <legend>{t('下载源与可信域名')}</legend>
+      <Field label={t('显示下载源域名')} hint={t('关闭后，下载选择弹窗只显示线路名称。')}>
+        <input
+          type="checkbox"
+          checked={showDomains}
+          onChange={(event) => onShowDomainsChange(event.target.checked)}
+        />
+      </Field>
       <p className="muted small">
         {t(
           '添加直连或 CDN 域名，用户下载时可选择线路。这些域名也将获准访问本站 API，请只添加你管理的域名。',

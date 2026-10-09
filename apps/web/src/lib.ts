@@ -63,6 +63,7 @@ export interface PageResult<T> {
 }
 export interface Settings {
   downloadSources: DownloadSource[];
+  showDownloadSourceDomains: boolean;
   iconUrl: string;
   hasCustomIcon: boolean;
   stealthMode: boolean;

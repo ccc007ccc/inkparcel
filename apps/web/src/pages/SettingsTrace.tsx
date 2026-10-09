@@ -252,6 +252,7 @@ export function SettingsPage({ base }: AdminProps) {
   const [days, setDays] = useState(30);
   const [stealthMode, setStealthMode] = useState(false);
   const [downloadSources, setDownloadSources] = useState<DownloadSource[]>([]);
+  const [showDownloadSourceDomains, setShowDownloadSourceDomains] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [busy, setBusy] = useState(false);
@@ -271,6 +272,7 @@ export function SettingsPage({ base }: AdminProps) {
         setDays(value.ipRetentionDays);
         setStealthMode(value.stealthMode);
         setDownloadSources(value.downloadSources);
+        setShowDownloadSourceDomains(value.showDownloadSourceDomains);
       })
       .catch((error) => setError(message(error)));
   }, [base]);
@@ -292,6 +294,7 @@ export function SettingsPage({ base }: AdminProps) {
         ipRetentionDays: days,
         stealthMode,
         downloadSources,
+        showDownloadSourceDomains,
       });
       if (next.adminPath !== settings.adminPath) {
         location.assign(`${next.adminPath}#settings`);
@@ -299,6 +302,7 @@ export function SettingsPage({ base }: AdminProps) {
       }
       setSettings(next);
       setDownloadSources(next.downloadSources);
+      setShowDownloadSourceDomains(next.showDownloadSourceDomains);
       await site.refresh();
       setSuccess('站点设置已保存。');
     } catch (error) {
@@ -469,7 +473,12 @@ export function SettingsPage({ base }: AdminProps) {
                   spellCheck={false}
                 />
               </Field>
-              <DownloadSourceEditor value={downloadSources} onChange={setDownloadSources} />
+              <DownloadSourceEditor
+                value={downloadSources}
+                onChange={setDownloadSources}
+                showDomains={showDownloadSourceDomains}
+                onShowDomainsChange={setShowDownloadSourceDomains}
+              />
               <Field
                 label={t('IP 地址保留天数')}
                 hint={t('只清理 IP，不影响用户、文件版本与历史溯源关系。设为 0 时不保留 IP。')}

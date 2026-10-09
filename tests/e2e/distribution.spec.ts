@@ -97,6 +97,7 @@ test('admin setup, multi-key upload, personal download and local trace', async (
   await expect(publicPage.getByRole('heading', { name: 'Preview 1', exact: true })).toBeVisible();
   await publicPage.getByRole('button', { name: '领取 Preview 1', exact: true }).click();
   await expect(publicPage.getByRole('dialog', { name: '选择下载源' })).toBeVisible();
+  await expect(publicPage.getByRole('dialog')).toContainText(cdnOrigin);
   expect((await (await page.request.get(`${adminPath}/api/downloads`)).json()).total).toBe(0);
   await publicPage.getByRole('button', { name: '取消', exact: true }).click();
   await publicPage.getByRole('button', { name: '领取 Preview 1', exact: true }).click();
@@ -139,6 +140,7 @@ test('admin setup, multi-key upload, personal download and local trace', async (
   // Presentation can be simplified without changing recipient authorization or trace behavior.
   await page.getByRole('link', { name: '站点设置', exact: true }).click();
   await page.getByRole('checkbox', { name: /隐匿模式/ }).check();
+  await page.getByRole('checkbox', { name: /显示下载源域名/ }).uncheck();
   await page.getByRole('button', { name: '保存站点设置', exact: true }).click();
   await expect(page.getByText('站点设置已保存。', { exact: true })).toBeVisible();
   const simpleContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
@@ -193,6 +195,9 @@ test('admin setup, multi-key upload, personal download and local trace', async (
   await simplePage.getByRole('button', { name: '下载 Preview 1', exact: true }).click();
   await simplePage.getByRole('radio', { name: /CDN/ }).check();
   const sourceDialog = simplePage.getByRole('dialog');
+  await expect(sourceDialog).not.toContainText(cdnOrigin);
+  await expect(sourceDialog).not.toContainText(origin);
+  await expect(simplePage.getByRole('radio', { name: 'CDN', exact: true })).toBeChecked();
   await sourceDialog.getByLabel('语言 / Language', { exact: true }).selectOption('en');
   await expect(sourceDialog).toHaveAccessibleName('Choose a download source');
   await expect(simplePage.getByRole('radio', { name: /CDN/ })).toBeChecked();
@@ -232,6 +237,7 @@ test('admin setup, multi-key upload, personal download and local trace', async (
   await expect(simplePage.getByRole('heading', { name: '提取文件', exact: true })).toBeVisible();
   await simpleContext.close();
   await page.getByRole('checkbox', { name: /隐匿模式/ }).uncheck();
+  await page.getByRole('checkbox', { name: /显示下载源域名/ }).check();
   await page.getByRole('button', { name: '保存站点设置', exact: true }).click();
   await expect(page.getByText('站点设置已保存。', { exact: true })).toBeVisible();
   await publicPage.reload();

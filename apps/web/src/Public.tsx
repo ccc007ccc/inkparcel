@@ -252,7 +252,7 @@ export function PublicLibrary({
                   />
                   <span>
                     <strong>{source.name}</strong>
-                    <small>{source.origin}</small>
+                    {site.showDownloadSourceDomains && <small>{source.origin}</small>}
                   </span>
                 </label>
               ))}

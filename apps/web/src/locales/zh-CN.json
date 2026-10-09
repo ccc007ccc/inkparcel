@@ -438,5 +438,7 @@
   "最多 8 条，仅填写 HTTPS 域名，不含路径。当前访问域名始终可用。CDN 必须关闭 API 和下载缓存，并透传 Cookie、查询参数及 Range 请求头。": "最多 8 条，仅填写 HTTPS 域名，不含路径。当前访问域名始终可用。CDN 必须关闭 API 和下载缓存，并透传 Cookie、查询参数及 Range 请求头。",
   "error.invalid_download_sources": "最多配置 8 个不重复的 HTTPS 域名地址，不能包含路径、凭据或查询参数",
   "error.invalid_download_source": "下载源不可用，请刷新页面后重试",
-  "error.invalid_download_token": "下载链接已失效，请重新选择下载源"
+  "error.invalid_download_token": "下载链接已失效，请重新选择下载源",
+  "显示下载源域名": "显示下载源域名",
+  "关闭后，下载选择弹窗只显示线路名称。": "关闭后，下载选择弹窗只显示线路名称。"
 }

@@ -121,7 +121,7 @@ R2 or commit a personal deployment domain to the open-source configuration.
 
 ## CDN and multiple download domains
 
-For an existing instance, back up D1, apply migrations including `0005_download_sources.sql`, then deploy the checked build. Sign in through the direct origin and open **Site settings → Download sources and trusted domains**. Add, for example, “Direct” `https://files.example.com` and “CDN” `https://cdn.example.com`. Both must be domains you manage, serving the same Worker instance. The browser's current origin remains available; multiple origins enable the download chooser. Clearing sources restores the default single-origin behavior.
+For an existing instance, back up D1, apply migrations including `0005_download_sources.sql`, then deploy the checked build. Sign in through the direct origin and open **Site settings → Download sources and trusted domains**. Add, for example, “Direct” `https://files.example.com` and “CDN” `https://cdn.example.com`. Both must be domains you manage, serving the same Worker instance. The browser's current origin remains available; multiple origins enable the download chooser. Clearing sources restores the default single-origin behavior. To show only source names, turn off “Show download source domains” in this section and save. This display option requires migration `0006_download_source_display.sql`.
 
 For reverse proxy CDNs such as Tencent Cloud EdgeOne:
 
