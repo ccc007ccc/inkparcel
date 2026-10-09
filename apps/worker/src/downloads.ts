@@ -3,6 +3,9 @@ import { decryptSecret, signMarker, utf8 } from './crypto';
 import { authorizedFile, now } from './db';
 import { r2Source } from './source';
 import { attachmentName, storedFormat } from './formats';
+import { recipientSession } from './auth';
+import { downloadSources } from './download-sources';
+import { downloadGrant, downloadIdentity, DOWNLOAD_GRANT_TTL } from './download-grants';
 import type { Bindings, DownloadRow } from './types';
 import { body, fail, fields, id } from './validation';
 
@@ -37,8 +40,12 @@ function disposition(name: string) {
   return `attachment; filename="${fallback}"; filename*=UTF-8''${encoded}`;
 }
 downloadRoutes.post('/files/:id/downloads', async (c) => {
+  await recipientSession(c);
   const input = await body(c);
-  fields(input, []);
+  fields(input, ['sourceOrigin']);
+  const source = input.sourceOrigin;
+  if (source !== undefined && !downloadSources(c).some((item) => item.origin === source))
+    fail(400, 'invalid_download_source', '下载源不可用，请刷新页面后重试');
   const file = await authorizedFile(c, id(c.req.param('id')));
   const user = c.get('user');
   const key = c.get('key');
@@ -80,9 +87,17 @@ downloadRoutes.post('/files/:id/downloads', async (c) => {
     )
     .run();
   if (!result.meta.changes) fail(403, 'access_revoked', '文件访问权限已变更');
-  return c.json({ id: issuanceId, url: `/api/downloads/${issuanceId}`, fileName: signedName }, 201);
+  let url = `/api/downloads/${issuanceId}`;
+  if (typeof source === 'string') {
+    const expires = Math.floor(Date.now() / 1000) + DOWNLOAD_GRANT_TTL;
+    const token = await downloadGrant(c.env, issuanceId, source, expires);
+    url = `${source}${url}?${new URLSearchParams({ source, expires: String(expires), token })}`;
+  }
+  return c.json({ id: issuanceId, url, fileName: signedName }, 201);
 });
 downloadRoutes.on(['GET', 'HEAD'], '/downloads/:id', async (c) => {
+  if (c.req.query('token') !== undefined) await downloadIdentity(c);
+  else await recipientSession(c);
   const receipt = await c.env.DB.prepare(
     'SELECT * FROM downloads WHERE id = ? AND user_id = ? AND key_id = ?',
   )

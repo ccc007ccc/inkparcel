@@ -139,9 +139,10 @@ export function query(c: Ctx): string {
 export function like(value: string) {
   return `%${value.replace(/[\\%_]/g, '\\$&')}%`;
 }
-export function assertOrigin(c: Ctx) {
+export function assertOrigin(c: Ctx, trustedOrigins: string[] = []) {
   if (['GET', 'HEAD', 'OPTIONS'].includes(c.req.method)) return;
-  if (c.req.header('Origin') !== new URL(c.req.url).origin)
+  const origin = c.req.header('Origin');
+  if (!origin || (origin !== new URL(c.req.url).origin && !trustedOrigins.includes(origin)))
     fail(403, 'origin_rejected', '请求来源无效');
   const site = c.req.header('Sec-Fetch-Site');
   if (site && site !== 'same-origin' && site !== 'none')

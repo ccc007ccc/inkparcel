@@ -46,6 +46,7 @@ import {
   userId,
 } from './validation';
 import { uploadRoutes } from './uploads';
+import { downloadSources, validateDownloadSources } from './download-sources';
 
 export const admin = new Hono<Bindings>();
 admin.use('*', async (c, next) => {
@@ -436,12 +437,17 @@ admin.get('/settings', (c) => {
     hasCustomIcon: !!s.icon_version,
     adminPath: s.admin_path,
     ipRetentionDays: s.ip_retention_days,
+    downloadSources: downloadSources(c),
   });
 });
 admin.patch('/settings', async (c) => {
   const input = await body(c);
-  fields(input, ['siteName', 'adminPath', 'ipRetentionDays', 'stealthMode']);
+  fields(input, ['siteName', 'adminPath', 'ipRetentionDays', 'stealthMode', 'downloadSources']);
   const current = c.get('settings')!;
+  const sources =
+    input.downloadSources === undefined
+      ? downloadSources(c)
+      : validateDownloadSources(input.downloadSources, c.env.ENVIRONMENT === 'local');
   const siteName =
     input.siteName === undefined ? current.site_name : text(input.siteName, '站点名称', 80);
   const path = input.adminPath === undefined ? current.admin_path : adminPath(input.adminPath);
@@ -452,9 +458,9 @@ admin.patch('/settings', async (c) => {
       ? current.ip_retention_days
       : integer(input.ipRetentionDays, 0, 3650);
   await c.env.DB.prepare(
-    'UPDATE settings SET site_name = ?, admin_path = ?, ip_retention_days = ?, stealth_mode = ? WHERE id = 1',
+    'UPDATE settings SET site_name = ?, admin_path = ?, ip_retention_days = ?, stealth_mode = ?, download_sources = ? WHERE id = 1',
   )
-    .bind(siteName, path, retention, Number(stealthMode))
+    .bind(siteName, path, retention, Number(stealthMode), JSON.stringify(sources))
     .run();
   if (retention === 0)
     await c.env.DB.prepare('UPDATE downloads SET ip = NULL WHERE ip IS NOT NULL').run();
@@ -463,6 +469,7 @@ admin.patch('/settings', async (c) => {
     adminPath: path,
     ipRetentionDays: retention,
     stealthMode,
+    downloadSources: sources,
     iconUrl: iconUrl(current.icon_version),
     hasCustomIcon: !!current.icon_version,
   });

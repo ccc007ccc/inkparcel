@@ -19,6 +19,11 @@ export interface SettingsRow {
   auth_version: number;
   ip_retention_days: number;
   created_at: string;
+  download_sources: string;
+}
+export interface DownloadSource {
+  name: string;
+  origin: string;
 }
 export interface KeyRow {
   id: string;

@@ -8,6 +8,8 @@ import { decode, encode, readMarker } from '../src/crypto';
 import { PART_SIZE } from '../src/uploads';
 import { app } from '../src/index';
 import type { Env } from '../src/types';
+import { downloadGrant } from '../src/download-grants';
+import { validateDownloadSources } from '../src/download-sources';
 
 const env = rawEnv as unknown as Env & { TEST_MIGRATIONS: D1Migration[] };
 const A = '/control-test';
@@ -140,6 +142,191 @@ async function upload(adminCookie: string, bytes: Uint8Array, keyIds: string[], 
 beforeEach(async () => {
   await reset();
   await applyD1Migrations(env.DB, env.TEST_MIGRATIONS);
+});
+
+describe('CDN sources and scoped downloads', () => {
+  const cdn = 'https://cdn.example.test';
+  const sources = [{ name: 'CDN', origin: cdn }];
+  async function configured() {
+    const adminCookie = await setup();
+    expect(
+      (await call(`${A}/api/settings`, 'PATCH', { downloadSources: sources }, adminCookie)).status,
+    ).toBe(200);
+    const key = await createKey(adminCookie);
+    const user = await recipient(adminCookie, key.key.id);
+    const file = await upload(adminCookie, structuralApk(), [key.key.id]);
+    const issued = await call(
+      `/api/files/${file.id}/downloads`,
+      'POST',
+      { sourceOrigin: cdn },
+      user.cookie,
+    );
+    expect(issued.status).toBe(201);
+    return { adminCookie, key, user, file, receipt: await json(issued) };
+  }
+  it('validates explicit origins and preserves sources across unrelated settings changes', async () => {
+    const adminCookie = await setup();
+    expect((await call(`${A}/api/settings`, 'PATCH', { downloadSources: sources })).status).toBe(
+      401,
+    );
+    for (const origin of [
+      'http://cdn.example.test',
+      '//cdn.example.test',
+      'https://u:p@cdn.example.test',
+      'https://cdn.example.test/path',
+      'https://cdn.example.test?x',
+      'https://cdn.example.test#x',
+      'https://cdn.example.test/..',
+      'https://*.example.test',
+    ]) {
+      expect(() => validateDownloadSources([{ name: 'CDN', origin }])).toThrow();
+    }
+    expect(() =>
+      validateDownloadSources([{ name: 'Local', origin: 'http://localhost:8792' }]),
+    ).toThrow();
+    expect(
+      validateDownloadSources([{ name: 'Local', origin: 'http://localhost:8792' }], true),
+    ).toHaveLength(1);
+    for (const value of [
+      null,
+      {},
+      [null],
+      Array(9).fill(sources[0]),
+      [...sources, { name: 'Duplicate', origin: cdn + '/' }],
+    ]) {
+      expect(
+        (await call(`${A}/api/settings`, 'PATCH', { downloadSources: value }, adminCookie)).status,
+      ).toBe(400);
+    }
+    const saved = await call(
+      `${A}/api/settings`,
+      'PATCH',
+      { downloadSources: [{ name: ' CDN ', origin: 'https://CDN.example.test:443/' }] },
+      adminCookie,
+    );
+    expect((await json(saved)).downloadSources).toEqual(sources);
+    await call(`${A}/api/settings`, 'PATCH', { siteName: 'Files' }, adminCookie);
+    expect((await json(await call('/api/site'))).downloadSources).toEqual(sources);
+  });
+  it('accepts configured proxy origins without trusting forwarded hosts or enabling cross-site mutations', async () => {
+    const adminCookie = await setup();
+    const request = (headers: Record<string, string>) =>
+      call(`${A}/api/settings`, 'PATCH', { siteName: 'Files' }, adminCookie, headers);
+    expect((await request({ Origin: cdn, 'Sec-Fetch-Site': 'same-origin' })).status).toBe(403);
+    await call(`${A}/api/settings`, 'PATCH', { downloadSources: sources }, adminCookie);
+    expect((await request({ Origin: cdn, 'Sec-Fetch-Site': 'same-origin' })).status).toBe(200);
+    for (const headers of [
+      { Origin: 'https://evil.example.test', 'X-Forwarded-Host': 'cdn.example.test' },
+      { Origin: cdn + '.evil.example.test' },
+      { Origin: 'null' },
+      { Origin: '' },
+      { Origin: cdn, 'Sec-Fetch-Site': 'cross-site' },
+      { Origin: cdn, 'Sec-Fetch-Site': 'same-site' },
+    ] as Record<string, string>[]) {
+      const response = await request(headers);
+      expect(response.status).toBe(403);
+      expect(response.headers.get('Cache-Control')).toBe('no-store');
+      expect(response.headers.get('Access-Control-Allow-Origin')).toBeNull();
+    }
+  });
+  it('downloads through a rewritten proxy host without cookies, preserving marked bytes and range semantics', async () => {
+    const { receipt, user, adminCookie } = await configured();
+    const url = new URL(receipt.url);
+    expect(url.origin).toBe(cdn);
+    const path = url.pathname + url.search;
+    const full = await call(path);
+    expect(full.status).toBe(200);
+    expect(full.headers.get('Cache-Control')).toBe('private, no-store');
+    const bytes = new Uint8Array(await full.arrayBuffer());
+    expect(bytes.length).toBe(Number(full.headers.get('Content-Length')));
+    expect(await apkHandler.extract(blobSource(new Blob([bytes])))).not.toBeNull();
+    const direct = await call(url.pathname, 'GET', undefined, user.cookie);
+    expect(new Uint8Array(await direct.arrayBuffer())).toEqual(bytes);
+    const alternateHost = await SELF.fetch(receipt.url);
+    expect(alternateHost.status).toBe(200);
+    expect(new Uint8Array(await alternateHost.arrayBuffer())).toEqual(bytes);
+    const head = await call(path, 'HEAD', undefined, undefined, { Range: 'bytes=-64' });
+    expect(head.status).toBe(200);
+    expect(Number(head.headers.get('Content-Length'))).toBe(bytes.length);
+    expect(await head.text()).toBe('');
+    const partial = await call(path, 'GET', undefined, undefined, {
+      Range: 'bytes=-64',
+      'If-Range': full.headers.get('ETag')!,
+    });
+    expect(partial.status).toBe(206);
+    expect(partial.headers.get('Content-Length')).toBe('64');
+    expect(new Uint8Array(await partial.arrayBuffer())).toEqual(bytes.slice(-64));
+    const invalid = await call(path, 'GET', undefined, undefined, { Range: 'bytes=999999-' });
+    expect(invalid.status).toBe(416);
+    expect(invalid.headers.get('Cache-Control')).toBe('private, no-store');
+    expect(
+      (await json(await call(`${A}/api/downloads`, 'GET', undefined, adminCookie))).total,
+    ).toBe(1);
+  });
+  it('rejects forged, expired, mis-scoped and unconfigured download credentials', async () => {
+    const { receipt, user, file } = await configured();
+    const url = new URL(receipt.url);
+    for (const change of [
+      (u: URL) => u.searchParams.set('token', 'invalid'),
+      (u: URL) => u.searchParams.set('expires', String(Number(u.searchParams.get('expires')) + 1)),
+      (u: URL) => u.searchParams.set('source', 'https://evil.example.test'),
+      (u: URL) => {
+        u.pathname = `/api/downloads/${crypto.randomUUID()}`;
+      },
+    ]) {
+      const bad = new URL(url);
+      change(bad);
+      expect((await call(bad.pathname + bad.search, 'GET', undefined, user.cookie)).status).toBe(
+        401,
+      );
+    }
+    const expires = Math.floor(Date.now() / 1000) - 1;
+    const token = await downloadGrant(env, receipt.id, cdn, expires);
+    expect(
+      (
+        await call(
+          `${url.pathname}?${new URLSearchParams({ source: cdn, expires: String(expires), token })}`,
+        )
+      ).status,
+    ).toBe(401);
+    for (const path of ['/api/session', '/api/files', `${A}/api/settings`])
+      expect((await call(path + url.search)).status).toBe(401);
+    expect((await call(`/api/files/${file.id}/downloads${url.search}`, 'POST', {})).status).toBe(
+      401,
+    );
+    expect(
+      (
+        await call(
+          `/api/files/${file.id}/downloads`,
+          'POST',
+          { sourceOrigin: 'https://evil.example.test' },
+          user.cookie,
+        )
+      ).status,
+    ).toBe(400);
+    expect((await call(url.pathname)).status).toBe(401);
+  });
+  it('rechecks user, key, file ACL and source removal for each bearer range request', async () => {
+    const { adminCookie, key, user, file, receipt } = await configured();
+    const url = new URL(receipt.url);
+    const range = () =>
+      call(url.pathname + url.search, 'GET', undefined, undefined, { Range: 'bytes=0-0' });
+    for (const [path, revoke, restore, status] of [
+      [`/users/${user.data.user.id}`, { blocked: true }, { blocked: false }, 401],
+      [`/keys/${key.key.id}`, { enabled: false }, { enabled: true }, 401],
+      [`/files/${file.id}`, { keyIds: [] }, { keyIds: [key.key.id] }, 404],
+      ['/settings', { downloadSources: [] }, { downloadSources: sources }, 401],
+    ] as const) {
+      expect((await call(`${A}/api${path}`, 'PATCH', revoke, adminCookie)).status).toBe(200);
+      expect((await range()).status).toBe(status);
+      expect((await call(`${A}/api${path}`, 'PATCH', restore, adminCookie)).status).toBe(200);
+      const restored = await range();
+      expect(restored.status).toBe(206);
+      await restored.arrayBuffer();
+    }
+    await call(`${A}/api/files/${file.id}`, 'DELETE', undefined, adminCookie);
+    expect((await range()).status).toBe(404);
+  });
 });
 
 describe('setup, routes and administrator sessions', () => {

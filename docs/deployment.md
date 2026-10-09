@@ -79,6 +79,22 @@ pnpm exec wrangler secret put BOOTSTRAP_TOKEN
 
 随后重新部署。Wrangler/Cloudflare 会配置对应路由与证书；确认 HTTPS 可用后，用该域名进行后台和领取操作。不要将域名绑定到 R2，也不要在开源配置中写入个人实际域名。
 
+## CDN 与多个下载域名
+
+升级现有实例时，先备份 D1，应用迁移（含 `0005_download_sources.sql`），再部署已检查版本。从直连域名登录后台，在「站点设置 → 下载源与可信域名」添加例如「直连」`https://files.example.com` 和「CDN 加速」`https://cdn.example.com`，保存后生效。这些域名必须由你管理，并指向同一 Worker 实例。当前浏览器域名始终可用；有多个域名时，点击下载会显示线路选择弹窗。清除配置恢复默认单域名行为。
+
+使用腾讯云 EdgeOne 等反向代理 CDN 时：
+
+1. 加速域名填写 `cdn.example.com`，将该域名的 DNS CNAME 指向 CDN 分配的接入地址。下载源填写 `https://cdn.example.com`；分配的 CNAME 目标不是下载域名，也不是源站。
+2. 源站填写已有直连 Worker 域名 `files.example.com`，使用 HTTPS 回源；回源 Host 和 TLS SNI 匹配源站域名。不要把源站指向 CDN 自身或私有 R2 存储桶。
+3. 建议仅缓存带内容哈希的 `/assets/*` 静态文件，其余路径绕过缓存，尤其 `/api/*`、管理入口及其 API。不要强制覆盖 `private, no-store`，不要用“忽略查询参数”的缓存键或缓存完整个性化文件。CDN 的线路优化可能改善速度，实际收益需测速确认。
+4. 保留完整查询串与 `Origin`、`Sec-Fetch-Site`、`Cookie`、`Range`、`If-Range` 请求头，保留 `Set-Cookie`、`Content-Disposition`、`Content-Length`、`Content-Range`、`ETag` 响应头。关闭 APK 的内容改写/自动压缩。允许 POST/PATCH/PUT/DELETE；不能把 API 请求重定向到另一域名。
+5. 确认 CDN 证书有效后，在 CDN 域名登录并浏览文件，再从直连域名选择 CDN 下载，检查 HEAD、206 续传、实际长度和撤权后的拒绝。调整规则后清除旧 API/页面缓存，避免残留旧配置或响应。
+
+两个域名的登录 Cookie 相互独立。跨域下载链接只有该次签发的权限，有效期 1 小时，无需在下载域名另行登录；到期后重新选择线路。CDN 请求日志应隐藏查询参数中的 token。故障时可从直连域名移除有问题的下载源，恢复默认下载。
+
+出现“请求来源无效”时，先检查当前访问的完整 HTTPS origin 是否已保存为下载源，以及 CDN 是否保留浏览器的 Origin/Fetch Metadata；不要通过删除来源校验解决。配置字段与凭证边界见 [API](API.md#下载源与跨域下载)。
+
 ## 验证线上实例
 
 创建测试密钥，上传受支持的原始 APK，明确选择可见密钥，并给一次性测试用户发码。在独立浏览器会话下载文件、尝试续传，再通过本地溯源页提取标记。验证下载后 APK 签名与证书，检查完整/范围响应的实际 `Content-Length`，并确认停用密钥阻止继续访问、历史标记仍可验证。

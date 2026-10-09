@@ -5,6 +5,7 @@ import { iconUrl } from './site-icon';
 import { cleanup } from './cleanup';
 import { settings } from './db';
 import { publicApi } from './public';
+import { downloadSources } from './download-sources';
 import type { Bindings, Env } from './types';
 import { ApiError, assertOrigin, fail } from './validation';
 
@@ -33,6 +34,8 @@ admin.onError(errorResponse);
 app.notFound(notFound);
 admin.notFound(notFound);
 app.use('*', async (c, next) => {
+  c.header('Cache-Control', 'no-store');
+  c.header('Referrer-Policy', 'no-referrer');
   const url = new URL(c.req.url);
   const local =
     c.env.ENVIRONMENT === 'local' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
@@ -49,7 +52,11 @@ app.use('*', async (c, next) => {
   const pathname = url.pathname;
   if (pathname.includes('%') || pathname.includes('\\') || pathname.includes('//'))
     return notFound();
-  assertOrigin(c);
+  c.set('settings', await settings(c.env.DB));
+  assertOrigin(
+    c,
+    downloadSources(c).map((source) => source.origin),
+  );
   c.header('X-Content-Type-Options', 'nosniff');
   c.header('Referrer-Policy', 'no-referrer');
   c.header('X-Frame-Options', 'DENY');
@@ -60,7 +67,6 @@ app.use('*', async (c, next) => {
     "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
   );
   if (!local) c.header('Strict-Transport-Security', 'max-age=31536000');
-  c.set('settings', await settings(c.env.DB));
   await next();
 });
 app.route('/api', publicApi);

@@ -62,12 +62,17 @@ export interface PageResult<T> {
   pageSize: number;
 }
 export interface Settings {
+  downloadSources: DownloadSource[];
   iconUrl: string;
   hasCustomIcon: boolean;
   stealthMode: boolean;
   siteName: string;
   adminPath: string;
   ipRetentionDays: number;
+}
+export interface DownloadSource {
+  name: string;
+  origin: string;
 }
 export class ApiError extends Error {
   constructor(

@@ -53,13 +53,16 @@ export async function recipientSession(c: Ctx) {
   const session = await parseSession(c.env, getCookie(c, names.recipient));
   if (!session || session.kind !== 'recipient' || !session.uid || !session.kid)
     fail(401, 'auth_required', '请先输入用户 ID 和提取码');
+  c.set('session', session);
+  return recipientIdentity(c, session.uid, session.kid);
+}
+export async function recipientIdentity(c: Ctx, uid: string, kid: string) {
   const [user, key] = await Promise.all([
-    c.env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(session.uid).first<UserRow>(),
-    c.env.DB.prepare('SELECT * FROM keys WHERE id = ?').bind(session.kid).first<KeyRow>(),
+    c.env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(uid).first<UserRow>(),
+    c.env.DB.prepare('SELECT * FROM keys WHERE id = ?').bind(kid).first<KeyRow>(),
   ]);
   if (!user || user.deleted || user.blocked || !key || key.deleted || !key.enabled)
     fail(401, 'access_revoked', '访问权限已停用');
-  c.set('session', session);
   c.set('user', user);
   c.set('key', key);
   return { user: { id: user.id, userId: user.user_id }, key: { id: key.id, name: key.name } };

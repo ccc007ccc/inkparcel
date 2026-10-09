@@ -8,7 +8,8 @@ import {
   LogOut,
   ShieldCheck,
 } from 'lucide-react';
-import { Alert, Brand, Breadcrumbs, Empty, Pagination, Spinner } from './components';
+import { Alert, Brand, Breadcrumbs, Empty, Modal, Pagination, Spinner } from './components';
+import { useSite } from './site';
 import {
   api,
   bytes,
@@ -40,6 +41,12 @@ export function PublicLibrary({
   session: Session;
   onLogout: () => void;
 }) {
+  const site = useSite();
+  const sources = site.downloadSources.some((source) => source.origin === location.origin)
+    ? site.downloadSources
+    : [{ name: t('当前线路'), origin: location.origin }, ...site.downloadSources];
+  const [selectedFile, setSelectedFile] = useState<PublicFile>();
+  const [selectedOrigin, setSelectedOrigin] = useState(location.origin);
   const [folderId, setFolderId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [library, setLibrary] = useState<Library>();
@@ -64,15 +71,19 @@ export function PublicLibrary({
     setFolderId(id);
     setPage(1);
   }
-  async function download(file: PublicFile) {
+  async function download(file: PublicFile, origin = location.origin) {
     setBusy(file.id);
     setError('');
     try {
       const result = await post<{
         url: string;
         fileName: string;
-      }>(`/api/files/${file.id}/downloads`);
+      }>(
+        `/api/files/${file.id}/downloads`,
+        origin === location.origin ? {} : { sourceOrigin: origin },
+      );
       downloadUrl(result.url, result.fileName);
+      setSelectedFile(undefined);
     } catch (error) {
       setError(message(error));
     } finally {
@@ -165,7 +176,13 @@ export function PublicLibrary({
                         className="button button-secondary"
                         aria-label={`${stealthMode ? t('下载') : t('领取')} ${file.name}`}
                         disabled={busy === file.id}
-                        onClick={() => void download(file)}
+                        onClick={() => {
+                          if (sources.length > 1) {
+                            setError('');
+                            setSelectedOrigin(location.origin);
+                            setSelectedFile(file);
+                          } else void download(file);
+                        }}
                       >
                         {busy === file.id ? (
                           <Spinner label={t('准备中')} />
@@ -204,6 +221,59 @@ export function PublicLibrary({
           </p>
         )}
       </main>
+      {selectedFile && (
+        <Modal
+          title={t('选择下载源')}
+          onClose={() => {
+            if (!busy) setSelectedFile(undefined);
+          }}
+        >
+          <form
+            className="stack"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!busy) void download(selectedFile, selectedOrigin);
+            }}
+          >
+            <p className="download-file-name">{selectedFile.name}</p>
+            <p className="muted small">
+              {t('选择一条线路开始下载。速度较慢时可以换一条线路重试。')}
+            </p>
+            <fieldset className="download-source-options" disabled={!!busy}>
+              <legend className="sr-only">{t('下载源')}</legend>
+              {sources.map((source) => (
+                <label key={source.origin}>
+                  <input
+                    type="radio"
+                    name="download-source"
+                    value={source.origin}
+                    checked={selectedOrigin === source.origin}
+                    onChange={() => setSelectedOrigin(source.origin)}
+                  />
+                  <span>
+                    <strong>{source.name}</strong>
+                    <small>{source.origin}</small>
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+            <Alert>{error}</Alert>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="button button-secondary"
+                disabled={!!busy}
+                onClick={() => setSelectedFile(undefined)}
+              >
+                {t('取消')}
+              </button>
+              <button className="button button-primary" disabled={!!busy}>
+                {busy ? <Spinner label={t('准备中')} /> : t('开始下载')}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
       {!stealthMode && (
         <footer className="site-footer">
           <span>{name}</span>

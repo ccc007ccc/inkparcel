@@ -4,6 +4,7 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn, spawnSync } from 'node:child_process';
 import ts from 'typescript';
+import { createServer, request } from 'node:http';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const state = resolve(root, 'target/e2e-state');
@@ -46,6 +47,34 @@ const migration = spawnSync(
   { cwd: root, env, stdio: 'inherit' },
 );
 if (migration.status !== 0) process.exit(migration.status ?? 1);
+// A second browser origin models a CDN that rewrites Host while preserving Origin.
+// Stream both directions so the test proxy cannot hide full-file buffering defects.
+const proxy = createServer((incoming, outgoing) => {
+  const upstream = request(
+    {
+      hostname: '127.0.0.1',
+      port: 8791,
+      path: incoming.url,
+      method: incoming.method,
+      headers: { ...incoming.headers, host: '127.0.0.1:8791' },
+    },
+    (response) => {
+      outgoing.writeHead(response.statusCode, response.headers);
+      response.pipe(outgoing);
+    },
+  );
+  upstream.on('error', () => {
+    outgoing.writeHead(502);
+    outgoing.end();
+  });
+  outgoing.on('close', () => upstream.destroy());
+  incoming.pipe(upstream);
+});
+await new Promise((resolve, reject) => {
+  proxy.once('error', reject);
+  proxy.listen(8793, '127.0.0.1', resolve);
+});
+
 const server = spawn(
   'pnpm',
   [
@@ -65,5 +94,10 @@ const server = spawn(
   ],
   { cwd: root, env, stdio: 'inherit' },
 );
-for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => server.kill(signal));
+for (const signal of ['SIGINT', 'SIGTERM'])
+  process.on(signal, () => {
+    proxy.close();
+    proxy.closeAllConnections();
+    server.kill(signal);
+  });
 server.on('exit', (code) => process.exit(code ?? 0));

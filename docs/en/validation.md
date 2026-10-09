@@ -2,14 +2,14 @@
 
 # Validation status
 
-This page records v0.1 local and remote functional acceptance through 2026-10-08.
+This page records v0.1 local and remote functional acceptance through 2026-10-09.
 These results do not establish Cloudflare Free CPU acceptance.
 
 ## Local acceptance
 
 - `pnpm check` passes formatting, relative documentation links/anchors, all TypeScript
-  checks, 62 package tests and the Vite/Worker production build with deployment dry run.
-  The package split is 29 binary, 17 Worker integration and 16 browser-logic tests.
+  checks, 67 package tests and the Vite/Worker production build with deployment dry run.
+  The package split is 29 binary, 22 Worker integration and 16 browser-logic tests.
 - Worker integration uses actual local Workerd with D1 migrations and R2 bindings:
   protected/concurrent setup, old-path 404, HTTPS/Origin enforcement, password/session
   invalidation, cross-key isolation, user controls, folders, 100-key bulk ACL updates,
@@ -66,6 +66,8 @@ Custom icons replace the old wrapper with no background or rotation; clearing an
 icon restores the original black emblem and empty settings state. Mobile layouts
 and the English retrieval page were visually inspected.
 
+The 2026-10-09 CDN change passes `pnpm check` (67 tests: 29 marking, 22 Worker and 16 frontend) and the full Chromium workflow. New coverage includes explicit origins, proxy Host rewriting, rejection of unknown origins and cross-site mutations, tampered/expired/mis-scoped download credentials, and rejection after user/key/file ACL/source revocation. Through a streaming local reverse proxy, Chromium verifies settings, cancellation without issuance, default direct selection, cross-origin download without CDN cookies, CDN-domain login, HEAD/suffix ranges and APK signatures. The 390 px mobile chooser and selection retention across language changes were visually checked. Migration `0005_download_sources.sql` was applied in real local D1.
+
 ## Continuous integration
 
 The committed [Checks workflow](../../.github/workflows/checks.yml) runs the local
@@ -77,6 +79,8 @@ workflow. This is historical CI evidence for that commit; later executable chang
 their own affected checks.
 
 ## Remote acceptance
+
+On 2026-10-09, the direct origin and a Tencent Cloud EdgeOne CDN origin serving the same instance passed feature acceptance. D1 was backed up before applying `0005_download_sources.sql` and deploying. With two sources configured, a browser downloaded a generic approximately 34 MiB APK (35,659,995 bytes) through the CDN from the direct page, preserving its signature. One HEAD probe encountered a transport disconnect. A smaller generic v2 fixture then passed CDN-page login, cross-origin downloads in both directions, identical full retries, HEAD length, and repeated suffix 206/Content-Length/Content-Range checks. Responses retained private/no-store without cache HITs. Disabling the test key made range requests to the same CDN URL return 401 access_revoked. Test files, keys and users were retired/cleaned up while issuance mappings were preserved. This establishes functional behavior for that chain, not domestic-network speed measurements or verification of other EdgeOne rule configurations.
 
 On 2026-10-07 a configured Cloudflare Worker, D1 and private R2 deployment passed
 functional checks using a generic fixture, without private project files:

@@ -119,6 +119,22 @@ Deploy again. Wrangler/Cloudflare configures routing and the certificate. Once H
 works, use this domain for administration and recipient access. Do not attach it to
 R2 or commit a personal deployment domain to the open-source configuration.
 
+## CDN and multiple download domains
+
+For an existing instance, back up D1, apply migrations including `0005_download_sources.sql`, then deploy the checked build. Sign in through the direct origin and open **Site settings → Download sources and trusted domains**. Add, for example, “Direct” `https://files.example.com` and “CDN” `https://cdn.example.com`. Both must be domains you manage, serving the same Worker instance. The browser's current origin remains available; multiple origins enable the download chooser. Clearing sources restores the default single-origin behavior.
+
+For reverse proxy CDNs such as Tencent Cloud EdgeOne:
+
+1. Set the acceleration domain to `cdn.example.com` and point its DNS CNAME at the provider's assigned endpoint. Configure `https://cdn.example.com` as the download source. The assigned CNAME target is neither the public download domain nor the origin server.
+2. Use the existing direct Worker domain `files.example.com` as the HTTPS upstream, with matching origin Host and TLS SNI. Never point upstream at the CDN itself or private R2 storage.
+3. Prefer caching only content-hashed `/assets/*` files. Bypass all other paths, particularly `/api/*`, the admin page and its APIs. Never override `private, no-store`, ignore query parameters in cache keys or cache personalized files. CDN routing may improve speed; measure actual gains.
+4. Forward full query strings and Origin, Sec-Fetch-Site, Cookie, Range and If-Range request headers. Preserve Set-Cookie, Content-Disposition, Content-Length, Content-Range and ETag responses. Disable APK body rewriting/automatic compression. Allow POST/PATCH/PUT/DELETE and avoid redirecting APIs across origins.
+5. With valid CDN TLS, sign in and browse through its domain, then choose it for a download from the direct domain. Check HEAD, 206 resume, actual lengths and rejection after revocation. Purge old page/API caches after changing rules.
+
+Login cookies are separate per domain. Cross-origin download links authorize only that issuance for one hour, without another login at the download domain. Choose a source again after expiry. Redact the token query parameter from CDN access logs. A broken source can be removed through the direct domain to restore default downloads.
+
+For “Invalid request origin”, check that the complete HTTPS origin is saved as a source and that the CDN preserves browser Origin/Fetch Metadata headers. Keep origin validation enabled. See the [API contract](API.md#sources-and-cross-origin-downloads) for configuration and credential boundaries.
+
 ## Verify the deployed instance
 
 Create a test key, upload an original supported APK, explicitly select its visible

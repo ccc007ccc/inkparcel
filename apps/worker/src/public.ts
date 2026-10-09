@@ -4,6 +4,7 @@ import { accessCode, decode, decryptSecret, encode, passwordVerifier } from './c
 import { clearCookie, issueCookie, rateLimit, recipientSession, secretMatches } from './auth';
 import { now, publicFile, publicFolder } from './db';
 import { downloadRoutes } from './downloads';
+import { downloadSources } from './download-sources';
 import type { Bindings, FileRow, FolderRow, KeyRow, UserRow } from './types';
 import {
   adminPath,
@@ -25,6 +26,7 @@ publicApi.get('/site', (c) =>
     stealthMode: !!c.get('settings')?.stealth_mode,
     iconUrl: iconUrl(c.get('settings')?.icon_version),
     hasCustomIcon: !!c.get('settings')?.icon_version,
+    downloadSources: downloadSources(c),
   }),
 );
 publicApi.on(['GET', 'HEAD'], '/site-icon', async (c) => {
@@ -118,6 +120,7 @@ publicApi.post('/logout', (c) => {
   clearCookie(c, 'recipient');
   return c.json({ ok: true });
 });
+publicApi.route('/', downloadRoutes);
 publicApi.use('*', async (c, next) => {
   await recipientSession(c);
   await next();
@@ -167,4 +170,3 @@ publicApi.get('/files', async (c) => {
     pageSize,
   });
 });
-publicApi.route('/', downloadRoutes);

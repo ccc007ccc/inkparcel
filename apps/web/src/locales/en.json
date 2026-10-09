@@ -422,5 +422,21 @@
   "error.request_failed": "Request failed. Please try again later",
   "error.marking": "The file format is invalid or unsupported",
   "pagination.summary": "Items: {{count, number}}",
-  "locale.label": "Language"
+  "locale.label": "Language",
+  "当前线路": "Current connection",
+  "选择下载源": "Choose a download source",
+  "下载源": "Download source",
+  "开始下载": "Start download",
+  "移除": "Remove",
+  "选择一条线路开始下载。速度较慢时可以换一条线路重试。": "Choose a connection to start downloading. If it is slow, try another source.",
+  "下载源与可信域名": "Download sources and trusted domains",
+  "添加直连或 CDN 域名，用户下载时可选择线路。这些域名也将获准访问本站 API，请只添加你管理的域名。": "Add direct or CDN domains so recipients can choose a download source. These domains will also be trusted by the site API. Only add domains you manage.",
+  "线路名称 {{value0}}": "Source name {{value0}}",
+  "线路地址 {{value0}}": "Source URL {{value0}}",
+  "移除线路 {{value0}}": "Remove source {{value0}}",
+  "添加下载源": "Add download source",
+  "最多 8 条，仅填写 HTTPS 域名，不含路径。当前访问域名始终可用。CDN 必须关闭 API 和下载缓存，并透传 Cookie、查询参数及 Range 请求头。": "Up to 8 HTTPS origins, without paths. The current origin always remains available. Disable CDN caching for APIs and downloads, and forward cookies, query parameters and Range headers.",
+  "error.invalid_download_sources": "Enter up to 8 unique HTTPS origins without paths, credentials or query parameters",
+  "error.invalid_download_source": "Download source unavailable. Refresh the page and try again",
+  "error.invalid_download_token": "Download link expired or invalid. Choose a download source again"
 }

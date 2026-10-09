@@ -26,7 +26,7 @@ scope. Interfaces must permit adding handlers without changing issuance logic.
 ## Platform and architecture
 
 - React + TypeScript + Vite frontend; Hono Worker API; private R2 storage and D1.
-- One deployment, same-origin APIs and cookies, static assets through the Worker
+- One deployment supports explicit site/CDN origins, each with same-origin APIs and separate cookies. Static assets pass through the Worker
   routing policy. Unknown pages and retired admin paths return an actual HTTP 404.
 - No entire APK buffers or whole-file hashing in Worker download requests. Sources
   support bounded random reads and streamed ranges. Browser hashing is incremental.
@@ -147,6 +147,14 @@ The byte-level format and fingerprint algorithm are defined in [APK format](apk-
   never inflate issuance counts for ranges or HEAD probes.
 - Provenance mappings remain after file/key retirement. IP retention is separately
   configurable and can be cleared without destroying issuance metadata.
+
+### CDN and download sources
+
+- Administrators configure up to 8 named HTTPS origins in site settings. These also form an explicit Origin allowlist for mutations; no wildcards or trust in client Forwarded/X-Forwarded-Host headers. Browser requests remain same-origin: cross-site/same-site Sec-Fetch-Site mutations are rejected, without cross-site cookies or CORS.
+- Public configuration exposes sources. The current browser origin always remains available. With multiple origins, downloading opens a source chooser; cancellation creates no issuance. Listing, authentication and issuance APIs always use the current page origin.
+- Without a selected source, downloads retain cookie authentication. Selecting another configured origin issues a short-lived bearer URL on the same `/api/downloads/:id` path there. A purpose-separated HMAC binds the issuance ID, configured source and expiry. Full/range/HEAD requests work for one hour; the credential cannot authorize sessions or other files.
+- The bearer URL also works through the same instance's origin host, allowing CDN Host rewriting; it does not authenticate the destination host. Anyone holding it can retrieve that issuance until expiry, so do not log complete query strings or use it for permanent sharing. Removing its source, disabling/deleting its user or key, deleting the file or revoking its ACL rejects subsequent requests. Expiry does not interrupt an active stream; new requests after expiry require choosing a source again.
+- Every download still checks identity and current file ACL in the Worker and streams the same issuance's marked bytes. The CDN proxies transport and must bypass API, admin-page and personalized-download caching, forward Cookie, Origin, query strings and range headers, and preserve Content-Length/Content-Range. Shared cache hits must never bypass revocation checks. R2 remains private.
 
 ## User interface
 

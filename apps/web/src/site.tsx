@@ -1,5 +1,7 @@
 import { createContext, useContext } from 'react';
+import type { DownloadSource } from './lib';
 export interface SiteInfo {
+  downloadSources: DownloadSource[];
   name: string;
   initialized: boolean;
   stealthMode: boolean;
@@ -7,6 +9,7 @@ export interface SiteInfo {
   hasCustomIcon: boolean;
 }
 export const SiteContext = createContext<SiteInfo & { refresh: () => Promise<void> }>({
+  downloadSources: [],
   name: 'InkParcel',
   initialized: false,
   stealthMode: false,

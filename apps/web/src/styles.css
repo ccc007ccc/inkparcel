@@ -1041,6 +1041,56 @@ a svg {
   background: #202b2166;
   backdrop-filter: blur(3px);
 }
+.download-file-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.download-source-options,
+.download-source-editor {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.download-source-editor > legend {
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+.download-source-options label {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  margin-bottom: 10px;
+  cursor: pointer;
+}
+.download-source-options label:has(input:checked) {
+  border-color: currentColor;
+}
+.download-source-options input {
+  width: auto;
+  flex-shrink: 0;
+}
+.download-source-options span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.download-source-options small {
+  display: block;
+  margin-top: 4px;
+}
+.download-source-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px;
+}
+.download-source-row .field {
+  flex: 1 1 180px;
+  min-width: 0;
+}
 .modal-wide {
   width: min(580px, calc(100vw - 32px));
 }

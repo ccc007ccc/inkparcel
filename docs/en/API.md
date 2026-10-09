@@ -4,7 +4,7 @@
 
 This document fixes the v0.1 interface shared by the Worker and browser. JSON
 success bodies are direct objects; errors are `{error:{code,message}}`. Mutating
-requests require a same-origin `Origin` header, JSON except upload parts, and the
+requests require an `Origin` matching the request origin or a configured download source, JSON except upload parts, and the
 appropriate HttpOnly cookie. All timestamps are ISO 8601 UTC. IDs are opaque strings.
 
 ## Routing and authentication
@@ -14,7 +14,7 @@ be compiled into frontend assets or returned by public discovery APIs.
 
 | Method / path       | Request                                               | Response                                                                         |
 | ------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------- |
-| GET `/api/site`     | —                                                     | `{name, initialized, stealthMode, iconUrl, hasCustomIcon}`                       |
+| GET `/api/site`     | —                                                     | `{name, initialized, stealthMode, iconUrl, hasCustomIcon, downloadSources}`      |
 | GET `/api/setup`    | —                                                     | `{available:true}` only before setup, otherwise 404                              |
 | POST `/api/setup`   | `{bootstrapToken,passwordKey,passwordSalt,adminPath}` | `{adminPath}` + admin cookie                                                     |
 | GET `A/api/auth`    | —                                                     | `{authenticated,passwordSalt,kdf:{algorithm:"PBKDF2-SHA256",iterations:600000}}` |
@@ -38,7 +38,7 @@ a loopback hostname allows HTTP development.
 | Method / path                   | Request                               | Response                                          |
 | ------------------------------- | ------------------------------------- | ------------------------------------------------- |
 | GET `/api/files`                | `folderId` optional, `page` default 1 | `{files,folders,breadcrumbs,total,page,pageSize}` |
-| POST `/api/files/:id/downloads` | `{}`                                  | `{id,url,fileName}`                               |
+| POST `/api/files/:id/downloads` | `{sourceOrigin?}`                     | `{id,url,fileName}`                               |
 | GET / HEAD `/api/downloads/:id` | standard HTTP range headers           | personalized attachment stream                    |
 
 Public file objects: `{id,name,size,uploadedAt}`. Folder objects:
@@ -50,35 +50,45 @@ the personalized bytes. Authentication/authorization is checked on every request
 `fileName` is the effective attachment name: a missing supported extension is
 appended using the format registry. Display names remain unchanged in file lists.
 
+### Sources and cross-origin downloads
+
+`downloadSources` is a `{name,origin}[]`, default `[]`, with at most 8 entries. Names have 1–40 characters after trim/NFC; URLs are at most 256 characters and must be HTTPS origins, optionally ending in `/`. Normalize to `URL.origin` and reject duplicates, credentials, paths, query strings, fragments and wildcards. HTTP loopback origins are accepted only with `ENVIRONMENT=local`. Omission in PATCH preserves sources; `[]` clears them; invalid values return 400 `invalid_download_sources`. Requires migration `0005_download_sources.sql`.
+
+Mutation Origin must exactly match the request origin or a configured source. Missing, `null` or unconfigured origins return 403 `origin_rejected`. When supplied, Sec-Fetch-Site must be `same-origin`/`none`; no CORS or forwarded-header trust is added. CDNs must forward browser headers unchanged.
+
+Issuance accepts optional `sourceOrigin`, exactly matching a configured origin or returning 400 `invalid_download_source`. Omission preserves the relative URL and cookie requirement. Selection returns an absolute URL with `source`, `expires` (Unix seconds) and `token`. HMAC-SHA-256 authenticates the JSON bytes of `[issuance ID,source,expires]`, using the separate `download-grant` purpose derived from `APP_SECRET`. The credential lasts 3600 seconds and permits repeated GET/HEAD and resume for that issuance's user and key only. It sets no cookie and cannot authorize listing, issuance or admin APIs. A supplied invalid/expired token returns 401 `invalid_download_token` without falling back to cookies. Removing the configured source also invalidates its credentials.
+
+The URL conveys short-lived bearer authority, without browser cookie binding or requiring the Worker-observed Host to match the CDN domain, allowing origin Host rewriting. Every request rechecks user, key, file and ACL; the same issuance retains identical bytes, ETag and range behavior. Downloads use `private, no-store`, errors use `no-store`, and Referrer-Policy is `no-referrer`. CDNs must bypass caching on these paths, preserve complete query strings, and redact tokens in access logs. Expiry does not terminate an active connection.
+
 ## Administration
 
 All following paths are prefixed with `A/api` and require admin authentication.
 
-| Method / path                    | Request                                                | Response                                                                 |
-| -------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------ |
-| GET `/keys`                      | —                                                      | `{items:Key[]}`                                                          |
-| POST `/keys`                     | `{name,secret?}`; omitted secret generates 32 bytes    | `{key:Key,secret}` (secret displayed once)                               |
-| PATCH `/keys/:id`                | `{name?,enabled?}`                                     | `{key:Key}`                                                              |
-| POST `/keys/:id/code`            | `{userId}`                                             | `{userId,code}`                                                          |
-| GET `/folders`                   | —                                                      | `{items:Folder[]}`                                                       |
-| POST `/folders`                  | `{name,parentId?,defaultKeyIds?}`                      | `{folder:Folder}`                                                        |
-| PATCH `/folders/:id`             | `{name?,parentId?,defaultKeyIds?}`                     | `{folder:Folder}`                                                        |
-| DELETE `/folders/:id`            | empty folders only                                     | `{ok:true}`                                                              |
-| GET `/files`                     | `folderId`, `page`, `q` optional                       | `{files:AdminFile[],total,page,pageSize}`                                |
-| PATCH `/files/:id`               | `{name?,folderId?,keyIds?}`                            | `{file:AdminFile}`                                                       |
-| DELETE `/files/:id`              | retire metadata and remove R2 object                   | `{ok:true}`                                                              |
-| POST `/uploads`                  | `{fileName,size,folderId?,keyIds,fingerprint}`         | `{fileId,partSize,partCount}`                                            |
-| GET `/uploads/:id`               | —                                                      | `{fileId,partSize,partCount,parts:[{partNumber,etag,size}]}`             |
-| PUT `/uploads/:id/parts/:number` | binary part body                                       | `{partNumber,etag,size}`                                                 |
-| POST `/uploads/:id/complete`     | `{}`                                                   | `{file:AdminFile}`                                                       |
-| DELETE `/uploads/:id`            | abort incomplete upload                                | `{ok:true}`                                                              |
-| GET `/users`                     | `q`, `page` optional                                   | `{items:User[],total,page,pageSize}`                                     |
-| PATCH `/users/:id`               | `{notes?,blocked?}`                                    | `{user:User}`                                                            |
-| GET `/downloads`                 | `userId`, `keyId`, `fileId`, `q`, `page` optional      | `{items:Download[],total,page,pageSize}`                                 |
-| POST `/trace`                    | `{marker,fingerprint?}`                                | `{authentic:true,contentMatch,record,user,key,file,signedName}`          |
-| GET `/settings`                  | —                                                      | `{siteName,adminPath,ipRetentionDays,stealthMode,iconUrl,hasCustomIcon}` |
-| PATCH `/settings`                | `{siteName?,adminPath?,ipRetentionDays?,stealthMode?}` | updated settings                                                         |
-| POST `/password`                 | `{currentPasswordKey,passwordKey,passwordSalt}`        | `{ok:true}`; existing admin sessions invalidated                         |
+| Method / path                    | Request                                                                 | Response                                                                                 |
+| -------------------------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| GET `/keys`                      | —                                                                       | `{items:Key[]}`                                                                          |
+| POST `/keys`                     | `{name,secret?}`; omitted secret generates 32 bytes                     | `{key:Key,secret}` (secret displayed once)                                               |
+| PATCH `/keys/:id`                | `{name?,enabled?}`                                                      | `{key:Key}`                                                                              |
+| POST `/keys/:id/code`            | `{userId}`                                                              | `{userId,code}`                                                                          |
+| GET `/folders`                   | —                                                                       | `{items:Folder[]}`                                                                       |
+| POST `/folders`                  | `{name,parentId?,defaultKeyIds?}`                                       | `{folder:Folder}`                                                                        |
+| PATCH `/folders/:id`             | `{name?,parentId?,defaultKeyIds?}`                                      | `{folder:Folder}`                                                                        |
+| DELETE `/folders/:id`            | empty folders only                                                      | `{ok:true}`                                                                              |
+| GET `/files`                     | `folderId`, `page`, `q` optional                                        | `{files:AdminFile[],total,page,pageSize}`                                                |
+| PATCH `/files/:id`               | `{name?,folderId?,keyIds?}`                                             | `{file:AdminFile}`                                                                       |
+| DELETE `/files/:id`              | retire metadata and remove R2 object                                    | `{ok:true}`                                                                              |
+| POST `/uploads`                  | `{fileName,size,folderId?,keyIds,fingerprint}`                          | `{fileId,partSize,partCount}`                                                            |
+| GET `/uploads/:id`               | —                                                                       | `{fileId,partSize,partCount,parts:[{partNumber,etag,size}]}`                             |
+| PUT `/uploads/:id/parts/:number` | binary part body                                                        | `{partNumber,etag,size}`                                                                 |
+| POST `/uploads/:id/complete`     | `{}`                                                                    | `{file:AdminFile}`                                                                       |
+| DELETE `/uploads/:id`            | abort incomplete upload                                                 | `{ok:true}`                                                                              |
+| GET `/users`                     | `q`, `page` optional                                                    | `{items:User[],total,page,pageSize}`                                                     |
+| PATCH `/users/:id`               | `{notes?,blocked?}`                                                     | `{user:User}`                                                                            |
+| GET `/downloads`                 | `userId`, `keyId`, `fileId`, `q`, `page` optional                       | `{items:Download[],total,page,pageSize}`                                                 |
+| POST `/trace`                    | `{marker,fingerprint?}`                                                 | `{authentic:true,contentMatch,record,user,key,file,signedName}`                          |
+| GET `/settings`                  | —                                                                       | `{siteName,adminPath,ipRetentionDays,stealthMode,iconUrl,hasCustomIcon,downloadSources}` |
+| PATCH `/settings`                | `{siteName?,adminPath?,ipRetentionDays?,stealthMode?,downloadSources?}` | updated settings                                                                         |
+| POST `/password`                 | `{currentPasswordKey,passwordKey,passwordSalt}`                         | `{ok:true}`; existing admin sessions invalidated                                         |
 
 - `Key`: `{id,code,name,enabled,createdAt}`. Imported secrets use 32-byte base64url.
 - `Folder`: `{id,name,parentId,defaultKeyIds}`.
@@ -98,7 +108,7 @@ All following paths are prefixed with `A/api` and require admin authentication.
 ### Deletion and management paths
 
 `DELETE A/api/keys/:id` and `DELETE A/api/users/:id` require an admin session and
-same-origin Origin, return `{ok:true}`, and are retryable. Soft-deleted identities
+a validated Origin, return `{ok:true}`, and are retryable. Soft-deleted identities
 are omitted from normal lists. Key deletion permanently disables access and removes
 file ACLs and folder defaults; user deletion permanently blocks the identity so old
 codes cannot automatically register it again. Issuance records, identity mappings and
@@ -179,7 +189,7 @@ title. `iconUrl` is a same-origin public URL. `PUT A/api/site-icon` accepts raw
 `image/png` bytes up to 256 KiB with dimensions 1–1024 pixels; it validates PNG
 signature/header/end structure. The browser also checks image decodability.
 `DELETE A/api/site-icon` restores the built-in icon. Both require administrator
-authentication and same-origin Origin and return `{iconUrl,hasCustomIcon}`.
+authentication and a validated Origin and return `{iconUrl,hasCustomIcon}`.
 `GET/HEAD /api/site-icon` serves PNG or the built-in SVG with nosniff and no-store.
 Replacement updates a versioned URL and the single D1 icon row atomically.
 

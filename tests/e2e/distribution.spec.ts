@@ -6,6 +6,7 @@ import { randomBytes } from 'node:crypto';
 import { apkHandler, blobSource } from '../../packages/marking/src/index';
 
 const origin = 'http://127.0.0.1:8791';
+const cdnOrigin = 'http://localhost:8793';
 const adminPath = '/control-e2e';
 const password = 'InkParcel-browser-test-2026';
 
@@ -77,6 +78,15 @@ test('admin setup, multi-key upload, personal download and local trace', async (
   });
 
   const recipient = await browser.newContext();
+  await page.getByRole('link', { name: '站点设置', exact: true }).click();
+  await page.getByRole('button', { name: '添加下载源', exact: true }).click();
+  await page.getByLabel('线路名称 1', { exact: true }).fill('Direct');
+  await page.getByLabel('线路地址 1', { exact: true }).fill(origin);
+  await page.getByRole('button', { name: '添加下载源', exact: true }).click();
+  await page.getByLabel('线路名称 2', { exact: true }).fill('CDN');
+  await page.getByLabel('线路地址 2', { exact: true }).fill(cdnOrigin);
+  await page.getByRole('button', { name: '保存站点设置', exact: true }).click();
+  await expect(page.getByText('站点设置已保存。', { exact: true })).toBeVisible();
   const publicPage = await recipient.newPage();
   publicPage.on('pageerror', (error) => failures.push(error.message));
   await publicPage.goto(origin);
@@ -85,8 +95,14 @@ test('admin setup, multi-key upload, personal download and local trace', async (
   await publicPage.getByRole('button', { name: '打开我的文件' }).click();
   await publicPage.getByRole('button', { name: 'Preview builds', exact: true }).click();
   await expect(publicPage.getByRole('heading', { name: 'Preview 1', exact: true })).toBeVisible();
-  const downloadPromise = publicPage.waitForEvent('download');
   await publicPage.getByRole('button', { name: '领取 Preview 1', exact: true }).click();
+  await expect(publicPage.getByRole('dialog', { name: '选择下载源' })).toBeVisible();
+  expect((await (await page.request.get(`${adminPath}/api/downloads`)).json()).total).toBe(0);
+  await publicPage.getByRole('button', { name: '取消', exact: true }).click();
+  await publicPage.getByRole('button', { name: '领取 Preview 1', exact: true }).click();
+  await expect(publicPage.getByRole('radio', { name: /Direct/ })).toBeChecked();
+  const downloadPromise = publicPage.waitForEvent('download');
+  await publicPage.getByRole('button', { name: '开始下载', exact: true }).click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toBe('Preview 1.apk');
   const downloadedPath = resolve('target/browser-personalized.apk');
@@ -108,7 +124,7 @@ test('admin setup, multi-key upload, personal download and local trace', async (
   const traceRequest = page.waitForRequest(
     (request) => request.url().endsWith('/api/trace') && request.method() === 'POST',
   );
-  await page.locator('input[type=file]').setInputFiles(downloadedPath);
+  await page.getByLabel('选择待溯源文件', { exact: true }).setInputFiles(downloadedPath);
   // Trace starts automatically after a local file selection.
   const trace = await traceRequest;
   expect(trace.postDataBuffer()?.byteLength ?? Infinity).toBeLessThan(8192);
@@ -172,6 +188,46 @@ test('admin setup, multi-key upload, personal download and local trace', async (
     path: resolve(screenshotDir, 'simple-library-mobile.png'),
     fullPage: true,
   });
+  // The alternate host has no recipient cookie; its download uses only a scoped grant.
+  expect((await simpleContext.request.get(cdnOrigin + '/api/session')).status()).toBe(401);
+  await simplePage.getByRole('button', { name: '下载 Preview 1', exact: true }).click();
+  await simplePage.getByRole('radio', { name: /CDN/ }).check();
+  const sourceDialog = simplePage.getByRole('dialog');
+  await sourceDialog.getByLabel('语言 / Language', { exact: true }).selectOption('en');
+  await expect(sourceDialog).toHaveAccessibleName('Choose a download source');
+  await expect(simplePage.getByRole('radio', { name: /CDN/ })).toBeChecked();
+  expect(
+    await simplePage.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+  ).toBeTruthy();
+  await simplePage.screenshot({
+    path: resolve(screenshotDir, 'download-sources-mobile.png'),
+    fullPage: true,
+  });
+  const cdnDownloadPromise = simplePage.waitForEvent('download');
+  await simplePage.getByRole('button', { name: 'Start download', exact: true }).click();
+  const cdnDownload = await cdnDownloadPromise;
+  expect(new URL(cdnDownload.url()).origin).toBe(cdnOrigin);
+  const cdnPath = resolve('target/browser-cdn.apk');
+  await cdnDownload.saveAs(cdnPath);
+  expect(await cdnDownload.failure()).toBeNull();
+  execFileSync(tools.apksigner, ['verify', '--min-sdk-version', '24', cdnPath], { stdio: 'pipe' });
+  const cdnBytes = await readFile(cdnPath);
+  const rangeResponse = await simpleContext.request.get(cdnDownload.url(), {
+    headers: { Range: 'bytes=-64' },
+  });
+  expect(rangeResponse.status()).toBe(206);
+  expect(rangeResponse.headers()['cache-control']).toBe('private, no-store');
+  expect(await rangeResponse.body()).toEqual(cdnBytes.subarray(-64));
+  expect((await simpleContext.request.get(cdnOrigin + '/api/session')).status()).toBe(401);
+  const cdnPage = await simpleContext.newPage();
+  await cdnPage.goto(cdnOrigin);
+  await cdnPage.getByLabel(/^用户 ID/).fill('tester@example.test');
+  await cdnPage.getByLabel('提取码', { exact: true }).fill(code);
+  await cdnPage.getByRole('button', { name: '提取文件', exact: true }).click();
+  await cdnPage.getByRole('button', { name: 'Preview builds', exact: true }).click();
+  await expect(cdnPage.getByRole('button', { name: '下载 Preview 1', exact: true })).toBeVisible();
+  await cdnPage.close();
+  await simplePage.getByLabel('语言 / Language', { exact: true }).selectOption('zh-CN');
   await simplePage.getByRole('button', { name: '退出', exact: true }).click();
   await expect(simplePage.getByRole('heading', { name: '提取文件', exact: true })).toBeVisible();
   await simpleContext.close();
@@ -185,7 +241,9 @@ test('admin setup, multi-key upload, personal download and local trace', async (
 
   const records = await page.request.get(`${adminPath}/api/downloads`);
   expect(records.status()).toBe(200);
-  const record = (await records.json()).items[0];
+  const record = (await records.json()).items.find(
+    (item: { id: string }) => item.id === claims.issuanceId,
+  );
   expect(record.userName).toBe('tester@example.test');
   const receiptUrl = `/api/downloads/${record.id}`;
   const fullLength = Number(
@@ -211,7 +269,7 @@ test('admin setup, multi-key upload, personal download and local trace', async (
   await page
     .getByRole('button', { name: '查看 tester@example.test 的领取记录', exact: true })
     .click();
-  await expect(page.getByRole('button', { name: 'Preview 1.apk', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Preview 1.apk', exact: true })).toHaveCount(2);
 
   // An existing user receives a separate key session without inheriting history.
   const isolatedKey = await page.request.post(`${adminPath}/api/keys`, {
@@ -416,7 +474,7 @@ test('admin setup, multi-key upload, personal download and local trace', async (
     page.getByRole('button', { name: '删除 tester@example.test', exact: true }),
   ).toHaveCount(0);
   await page.getByRole('link', { name: '文件溯源', exact: true }).click();
-  await page.locator('input[type=file]').setInputFiles(downloadedPath);
+  await page.getByLabel('选择待溯源文件', { exact: true }).setInputFiles(downloadedPath);
   await expect(page.getByText('tester@example.test', { exact: true }).first()).toBeVisible();
   await expect(page.getByText(/文件内容.*一致/).first()).toBeVisible();
   await page.getByLabel('语言 / Language', { exact: true }).selectOption('en');
